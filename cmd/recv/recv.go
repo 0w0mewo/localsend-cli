@@ -36,17 +36,6 @@ var Cmd = &cobra.Command{
 			}
 		}()
 
-		// start advertising to local network
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := recver.Advertise()
-			if err != nil {
-				slog.Error("Fail to start advertiser", "error", err)
-				return
-			}
-		}()
-
 		<-utils.WaitForSignal()
 
 		recver.Stop()

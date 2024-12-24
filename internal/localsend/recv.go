@@ -21,7 +21,7 @@ type FileReceiver struct {
 	supportHttps bool
 	sessStore    *sync.Map
 	saveToDir    string
-	advertiser   *MulticastAdvertiser
+	discoverier  *Discoverier
 	done         chan struct{}
 }
 
@@ -56,7 +56,7 @@ func (fr *FileReceiver) Init() error {
 	}
 
 	// start advertisement
-	fr.advertiser, err = NewMulticastAdvertiser(fr.identity, fr.supportHttps)
+	fr.discoverier, err = NewDiscoverier(fr.identity, fr.supportHttps)
 	if err != nil {
 		return err
 	}
@@ -153,6 +153,7 @@ func (fr *FileReceiver) Start() error {
 	slog.Info("Waitting for receiving files (Ctrl-C to terminate)")
 
 	go fr.gc()
+	go fr.advertise() // let others know we are here
 
 	if fr.supportHttps {
 		return fr.webServer.ListenTLSWithCertificate("0.0.0.0:53317", fr.cert)
@@ -161,15 +162,14 @@ func (fr *FileReceiver) Start() error {
 	return fr.webServer.Listen("0.0.0.0:53317")
 }
 
-func (fr *FileReceiver) Advertise() error {
-	slog.Info("Start advertising")
-	return fr.advertiser.Start()
+func (fr *FileReceiver) advertise() error {
+	return fr.discoverier.Listen()
 }
 
 func (fr *FileReceiver) Stop() error {
 	slog.Info("Stop receiving")
 
-	fr.advertiser.Stop()
+	fr.discoverier.Shutdown()
 	fr.done <- struct{}{}
 	return fr.webServer.Shutdown()
 }

@@ -8,12 +8,10 @@ import (
 	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/models"
-	"github.com/0w0mewo/localsend-cli/internal/store"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 )
 
 const (
-	maxAdvCount = 5
 	advInterval = 3 * time.Second
 )
 
@@ -22,14 +20,16 @@ var multicastDiscoveryAddr = &net.UDPAddr{
 	Port: 53317,
 }
 
-type MulticastAdvertiser struct {
-	conn *net.UDPConn
-	anno *models.Announcement
-	stop chan struct{}
+type Discoverier struct {
+	mcastConn   *net.UDPConn
+	selfAnno    *models.Announcement
+	discoveried map[string]models.Announcement
+	mu          *sync.RWMutex
+	stop        chan struct{}
 }
 
-func NewMulticastAdvertiser(devInfo models.DeviceInfo, supportHttps bool) (*MulticastAdvertiser, error) {
-	conn, err := net.DialUDP("udp", nil, multicastDiscoveryAddr)
+func NewDiscoverier(devInfo models.DeviceInfo, supportHttps bool) (*Discoverier, error) {
+	conn, err := net.ListenMulticastUDP("udp", nil, multicastDiscoveryAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -39,19 +39,21 @@ func NewMulticastAdvertiser(devInfo models.DeviceInfo, supportHttps bool) (*Mult
 		protocol = "https"
 	}
 
-	return &MulticastAdvertiser{
-		conn: conn,
-		anno: &models.Announcement{
+	return &Discoverier{
+		mcastConn: conn,
+		selfAnno: &models.Announcement{
 			DeviceInfo: devInfo,
 			Port:       53317,
 			Protocol:   protocol,
 			Announce:   true,
 		},
-		stop: make(chan struct{}),
+		stop:        make(chan struct{}),
+		discoveried: make(map[string]models.Announcement),
+		mu:          &sync.RWMutex{},
 	}, nil
 }
 
-func (ma *MulticastAdvertiser) Start() error {
+func (ma *Discoverier) Listen() error {
 	ticker := time.NewTicker(advInterval)
 	defer ticker.Stop()
 
@@ -67,18 +69,21 @@ func (ma *MulticastAdvertiser) Start() error {
 				slog.Warn("Fail to send announcement", "error", err)
 				continue
 			}
-
+			err = ma.readAndRegister()
+			if err != nil {
+				continue
+			}
 		}
 	}
 }
 
-func (ma *MulticastAdvertiser) advertise() error {
-	b, err := json.Marshal(ma.anno)
+func (ma *Discoverier) advertise() error {
+	b, err := json.Marshal(ma.selfAnno)
 	if err != nil {
 		return err
 	}
 
-	_, err = ma.conn.Write(b)
+	_, err = ma.mcastConn.WriteToUDP(b, multicastDiscoveryAddr)
 	if err != nil {
 		return err
 	}
@@ -86,52 +91,17 @@ func (ma *MulticastAdvertiser) advertise() error {
 	return nil
 }
 
-func (ma *MulticastAdvertiser) Stop() error {
+func (ma *Discoverier) Shutdown() error {
 	ma.stop <- struct{}{}
-	return ma.conn.Close()
+	return ma.mcastConn.Close()
 }
 
-type MulticastScanner struct {
-	conn    *net.UDPConn
-	devices map[string]models.Announcement
-	mu      *sync.RWMutex
-}
-
-func NewMulticastScanner() (*MulticastScanner, error) {
-	conn, err := net.ListenMulticastUDP("udp", nil, multicastDiscoveryAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &MulticastScanner{
-		conn:    conn,
-		devices: make(map[string]models.Announcement),
-		mu:      &sync.RWMutex{},
-	}, nil
-}
-
-func (mcs *MulticastScanner) Scan(timeout time.Duration) error {
-	var err error
-	for trial := 0; trial < 3; trial++ {
-		err = readAndRegister(timeout/3, mcs.conn)
-		if err != nil {
-			continue
-		}
-	}
-	return err
-}
-
-func (mcs *MulticastScanner) Stop() error {
-	return mcs.conn.Close()
-}
-
-func readAndRegister(timeout time.Duration, conn *net.UDPConn) error {
-	conn.SetReadBuffer(512)
-	conn.SetDeadline(time.Now().Add(timeout))
+func (mcs *Discoverier) readAndRegister() error {
+	mcs.mcastConn.SetReadBuffer(512)
 
 	buf := make([]byte, 512)
 
-	n, remoteAddr, err := conn.ReadFromUDP(buf)
+	n, remoteAddr, err := mcs.mcastConn.ReadFromUDP(buf)
 	if err != nil {
 		return err
 	}
@@ -150,9 +120,23 @@ func readAndRegister(timeout time.Duration, conn *net.UDPConn) error {
 	for idx := range myIPAddrs {
 		// avoid self discovery
 		if !myIPAddrs[idx].Equal(remoteAddr.IP) {
-			store.PutDevice(remoteAddr.IP, anno)
+			mcs.PutDiscovered(remoteAddr.IP.To4().String(), anno)
 		}
 	}
 
 	return nil
+}
+
+func (mcs *Discoverier) GetAllDiscovered() map[string]models.Announcement {
+	mcs.mu.RLock()
+	defer mcs.mu.RUnlock()
+
+	return mcs.discoveried
+}
+
+func (mcs *Discoverier) PutDiscovered(ip string, anno models.Announcement) {
+	mcs.mu.Lock()
+	defer mcs.mu.Unlock()
+
+	mcs.discoveried[ip] = anno
 }

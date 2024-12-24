@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend"
 	"github.com/0w0mewo/localsend-cli/internal/models"
-	"github.com/0w0mewo/localsend-cli/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -21,31 +21,24 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		slog.Info("Start Scanning")
 
-		// advertise myself so that all the others advertise themselves
-		adv, err := localsend.NewMulticastAdvertiser(models.NewDeviceInfo("localsend-cli", ""), true)
+		scanner, err := localsend.NewDiscoverier(models.NewDeviceInfo("localsend-cli", ""), true)
 		if err != nil {
 			slog.Error("Fail to create advertiser", "error", err)
 			return
 		}
-		scanner, err := localsend.NewMulticastScanner()
-		if err != nil {
-			slog.Error("Fail to create scanner", "error", err)
-			return
-		}
 
-		go adv.Start()
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			scanner.Listen()
+		}()
 
-		err = scanner.Scan(time.Duration(timeout) * time.Second)
-		if err != nil {
-			slog.Error("Fail multicast scanning", "error", err)
-			return
-		}
-
+		<-time.After(time.Second * time.Duration(timeout))
 		slog.Info("Stop Scanning")
-		scanner.Stop()
-		adv.Stop()
+		scanner.Shutdown()
 
-		devlist := store.GetAllDevices()
+		devlist := scanner.GetAllDiscovered()
 
 		if len(devlist) > 0 {
 			fmt.Fprintf(os.Stdout, "Found Devices: \n")
@@ -60,5 +53,5 @@ var Cmd = &cobra.Command{
 }
 
 func init() {
-	Cmd.PersistentFlags().Int64VarP(&timeout, "timeout", "t", 2, "scan duration in seconds")
+	Cmd.PersistentFlags().Int64VarP(&timeout, "timeout", "t", 4, "scan duration in seconds")
 }
