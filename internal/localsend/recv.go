@@ -44,6 +44,7 @@ func (fr *FileReceiver) Init() error {
 	var err error
 
 	if fr.supportHttps {
+		slog.Info("Generating https certificate")
 		// generate cert for https server
 		fr.cert, err = genTLScert()
 		if err != nil {
