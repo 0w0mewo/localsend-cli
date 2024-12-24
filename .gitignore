@@ -1,0 +1,34 @@
+# Air (hot reload) generated
+.air
+
+# temp folder
+tmp
+
+# Frontend asset
+web/dist
+
+# build folder
+build
+
+# testdat
+testdata
+
+.DS_Store
+
+# Jetbrains
+.idea
+
+# Docker Compose Environment File
+.env
+
+bin/air
+
+dev-dist
+
+dist
+
+# VSCode settings
+/.vscode
+
+*.sh
+docker-compose.dev.yml
