@@ -23,6 +23,7 @@ type FileSender struct {
 	session string
 	https   bool
 	abort   bool
+	pin     string
 }
 
 func NewFileSender() *FileSender {
@@ -30,6 +31,10 @@ func NewFileSender() *FileSender {
 		files:  make(map[string]models.FileMeta),
 		tokens: make(map[string]string),
 	}
+}
+
+func (fsp *FileSender) SetPIN(pin string) {
+	fsp.pin = pin
 }
 
 func (fsp *FileSender) Init(target *models.DeviceInfo, https bool) error {
@@ -85,7 +90,12 @@ func (fsp *FileSender) preUploadReq() error {
 	}
 	remoteAddr := net.JoinHostPort(fsp.remote.IP, "53317")
 	base := filepath.Join(remoteAddr, PreuploadPath)
-	url := fmt.Sprintf("%s://%s", scheme, base)
+
+	var pinQuery string
+	if fsp.pin != "" {
+		pinQuery = "?pin=" + fsp.pin
+	}
+	url := fmt.Sprintf("%s://%s%s", scheme, base, pinQuery)
 
 	if fsp.https {
 		// check fingerprint if https mode (See https://github.com/localsend/protocol section.2)

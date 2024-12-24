@@ -13,6 +13,7 @@ var (
 	devname      string
 	savetodir    string
 	supportHttps bool
+	pin          string
 )
 
 var Cmd = &cobra.Command{
@@ -21,6 +22,7 @@ var Cmd = &cobra.Command{
 	Long:  "Receive files from localsend instance",
 	Run: func(cmd *cobra.Command, args []string) {
 		recver := localsend.NewFileReceiver(devname, savetodir, supportHttps)
+		recver.SetPIN(pin)
 		recver.Init()
 
 		var wg sync.WaitGroup
@@ -46,5 +48,6 @@ var Cmd = &cobra.Command{
 func init() {
 	Cmd.PersistentFlags().StringVarP(&devname, "devname", "n", "localsend-cli", "Device name that is advertising")
 	Cmd.PersistentFlags().StringVarP(&savetodir, "dir", "d", ".", "Directory for received files")
+	Cmd.PersistentFlags().StringVarP(&pin, "pin", "p", "", "PIN code")
 	Cmd.PersistentFlags().BoolVar(&supportHttps, "https", true, "Do https")
 }

@@ -13,6 +13,7 @@ var (
 	ip           string
 	file         string
 	supportHttps bool
+	pin          string
 )
 
 var Cmd = &cobra.Command{
@@ -36,6 +37,7 @@ var Cmd = &cobra.Command{
 		}
 
 		sender := localsend.NewFileSender()
+		sender.SetPIN(pin)
 		sender.Init(&devinfo, supportHttps)
 
 		finfo, err := os.Stat(file)
@@ -70,7 +72,8 @@ var Cmd = &cobra.Command{
 }
 
 func init() {
-	Cmd.PersistentFlags().StringVarP(&ip, "ip", "p", "", "IP address of remote localsend instance")
+	Cmd.PersistentFlags().StringVar(&ip, "ip", "", "IP address of remote localsend instance")
 	Cmd.PersistentFlags().StringVarP(&file, "file", "f", "", "File/Directory to be sent")
 	Cmd.PersistentFlags().BoolVar(&supportHttps, "https", true, "Do https")
+	Cmd.PersistentFlags().StringVarP(&pin, "pin", "p", "", "PIN code")
 }

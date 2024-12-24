@@ -22,6 +22,7 @@ type FileReceiver struct {
 	sessStore    *sync.Map
 	saveToDir    string
 	discoverier  *Discoverier
+	expectedPin  string
 	done         chan struct{}
 }
 
@@ -38,6 +39,10 @@ func NewFileReceiver(devname string, saveToDir string, supportHttps bool) *FileR
 		saveToDir:    saveToDir,
 		done:         make(chan struct{}),
 	}
+}
+
+func (fr *FileReceiver) SetPIN(pin string) {
+	fr.expectedPin = pin
 }
 
 func (fr *FileReceiver) Init() error {
@@ -65,6 +70,14 @@ func (fr *FileReceiver) Init() error {
 }
 
 func (fr *FileReceiver) preUploadHandler(c *fiber.Ctx) error {
+	// check pin if it's set
+	if fr.expectedPin != "" {
+		pin := c.Query("pin")
+		if pin != fr.expectedPin {
+			return c.SendStatus(403)
+		}
+	}
+
 	var metaReq models.PreUploadReq
 
 	err := c.BodyParser(&metaReq)
