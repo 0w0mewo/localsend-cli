@@ -123,6 +123,7 @@ func (fsp *FileSender) preUploadReq() error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
