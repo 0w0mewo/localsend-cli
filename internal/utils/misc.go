@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
+	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -65,4 +66,10 @@ func GetMyIPv4Addr() ([]net.IP, error) {
 		}
 	}
 	return res, nil
+}
+
+func RandChoice[T any](l []T) T {
+	randIndex := rand.Intn(len(l) - 1)
+
+	return l[randIndex]
 }

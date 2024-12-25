@@ -10,7 +10,79 @@ import (
 	"math/big"
 	"net/http"
 	"time"
+
+	"github.com/0w0mewo/localsend-cli/internal/utils"
 )
+
+var aliasAdj = []string{
+	"Adorable",
+	"Beautiful",
+	"Big",
+	"Bright",
+	"Clean",
+	"Clever",
+	"Cool",
+	"Cute",
+	"Cunning",
+	"Determined",
+	"Energetic",
+	"Efficient",
+	"Fantastic",
+	"Fast",
+	"Fine",
+	"Fresh",
+	"Good",
+	"Gorgeous",
+	"Great",
+	"Handsome",
+	"Hot",
+	"Kind",
+	"Lovely",
+	"Mystic",
+	"Neat",
+	"Nice",
+	"Patient",
+	"Pretty",
+	"Powerful",
+	"Rich",
+	"Secret",
+	"Smart",
+	"Solid",
+	"Special",
+	"Strategic",
+	"Strong",
+	"Tidy",
+	"Wise",
+}
+
+var aliasFruit = []string{
+	"Apple",
+	"Avocado",
+	"Banana",
+	"Blackberry",
+	"Blueberry",
+	"Broccoli",
+	"Carrot",
+	"Cherry",
+	"Coconut",
+	"Grape",
+	"Lemon",
+	"Lettuce",
+	"Mango",
+	"Melon",
+	"Mushroom",
+	"Onion",
+	"Orange",
+	"Papaya",
+	"Peach",
+	"Pear",
+	"Pineapple",
+	"Potato",
+	"Pumpkin",
+	"Raspberry",
+	"Strawberry",
+	"Tomato",
+}
 
 var HttpClient = &http.Client{
 	Timeout: 30 * time.Second,
@@ -57,4 +129,11 @@ func GenTLScert() (tls.Certificate, error) {
 	})
 
 	return tls.X509KeyPair(certPem, certPrivKeyPem)
+}
+
+func GenAlias() string {
+	adj := utils.RandChoice(aliasAdj)
+	fruit := utils.RandChoice(aliasFruit)
+
+	return adj + " " + fruit
 }

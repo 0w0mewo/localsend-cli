@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	lsrecv "github.com/0w0mewo/localsend-cli/internal/localsend/recv"
+	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -46,7 +47,7 @@ var Cmd = &cobra.Command{
 }
 
 func init() {
-	Cmd.PersistentFlags().StringVarP(&devname, "devname", "n", "localsend-cli", "Device name that is advertising")
+	Cmd.PersistentFlags().StringVarP(&devname, "devname", "n", lsutils.GenAlias(), "Device name that is advertising")
 	Cmd.PersistentFlags().StringVarP(&savetodir, "dir", "d", ".", "Directory for received files")
 	Cmd.PersistentFlags().StringVarP(&pin, "pin", "p", "", "PIN code")
 	Cmd.PersistentFlags().BoolVar(&supportHttps, "https", true, "Do https")

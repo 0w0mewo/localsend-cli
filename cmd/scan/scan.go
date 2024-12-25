@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend"
+	"github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +23,9 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		slog.Info("Start Scanning")
 
-		scanner, err := localsend.NewDiscoverier(models.NewDeviceInfo("localsend-cli", ""), true)
+		scanner, err := localsend.NewDiscoverier(
+			models.NewDeviceInfo(utils.GenAlias(), uuid.NewString()),
+			true)
 		if err != nil {
 			slog.Error("Fail to create advertiser", "error", err)
 			return
