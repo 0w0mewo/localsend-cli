@@ -6,14 +6,16 @@ import (
 	"os"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend"
+	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/spf13/cobra"
 )
 
 var (
-	ip           string
-	file         string
-	supportHttps bool
-	pin          string
+	ip             string
+	file           string
+	supportHttps   bool
+	pin            string
+	useDownloadAPI bool
 )
 
 var Cmd = &cobra.Command{
@@ -27,24 +29,29 @@ var Cmd = &cobra.Command{
 		if file == "" {
 			return errors.New("File is required")
 		}
-
-		slog.Info("Start sending", "file", file)
-
-		devinfo, err := localsend.GetDeviceInfo(ip)
-		if err != nil {
-			slog.Error("Fail to get device info", "error", err)
-			return nil
-		}
-
-		sender := localsend.NewFileSender()
-		sender.SetPIN(pin)
-		sender.Init(&devinfo, supportHttps)
-
 		finfo, err := os.Stat(file)
 		if err != nil {
 			slog.Error("Fail to get file info", "error", err)
 			return nil
 		}
+
+		slog.Info("Start sending", "file", file)
+
+		// only request remote device info when download api is unused
+		var devinfo models.DeviceInfo
+		if !useDownloadAPI {
+			devinfo, err = localsend.GetDeviceInfo(ip)
+			if err != nil {
+				slog.Error("Fail to get device info", "error", err)
+				return nil
+			}
+		} else {
+			devinfo = models.NewDeviceInfo("localsend-cli", "")
+		}
+
+		sender := localsend.NewFileSender(useDownloadAPI)
+		sender.SetPIN(pin)
+		sender.Init(&devinfo, supportHttps)
 
 		if finfo.IsDir() {
 			err = sender.AddDir(file)
@@ -75,5 +82,6 @@ func init() {
 	Cmd.PersistentFlags().StringVar(&ip, "ip", "", "IP address of remote localsend instance")
 	Cmd.PersistentFlags().StringVarP(&file, "file", "f", "", "File/Directory to be sent")
 	Cmd.PersistentFlags().BoolVar(&supportHttps, "https", true, "Do https")
+	Cmd.PersistentFlags().BoolVar(&useDownloadAPI, "dapi", false, "Use Download API(Reverse File Transfer)")
 	Cmd.PersistentFlags().StringVarP(&pin, "pin", "p", "", "PIN code")
 }

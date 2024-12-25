@@ -38,6 +38,11 @@ func GetDeviceInfo(ip string) (models.DeviceInfo, error) {
 	return res, nil
 }
 
-func NewFileSender() send.FileSender {
+func NewFileSender(useDownloadAPI ...bool) send.FileSender {
+	if len(useDownloadAPI) > 0 {
+		if useDownloadAPI[0] {
+			return send.NewReverseSender()
+		}
+	}
 	return send.NewForwardSender()
 }
