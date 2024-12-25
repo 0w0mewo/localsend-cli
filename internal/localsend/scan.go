@@ -98,6 +98,7 @@ func (ma *Discoverier) Shutdown() error {
 
 func (mcs *Discoverier) readAndRegister() error {
 	mcs.mcastConn.SetReadBuffer(512)
+	mcs.mcastConn.SetReadDeadline(time.Now().Add(1 * time.Second))
 
 	buf := make([]byte, 512)
 

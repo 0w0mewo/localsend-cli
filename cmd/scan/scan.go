@@ -37,6 +37,7 @@ var Cmd = &cobra.Command{
 		<-time.After(time.Second * time.Duration(timeout))
 		slog.Info("Stop Scanning")
 		scanner.Shutdown()
+		wg.Wait()
 
 		devlist := scanner.GetAllDiscovered()
 
