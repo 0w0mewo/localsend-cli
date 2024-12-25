@@ -7,6 +7,7 @@ import (
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend"
 	"github.com/0w0mewo/localsend-cli/internal/models"
+	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -23,7 +24,7 @@ var Cmd = &cobra.Command{
 	Short: "Send files to localsend instance",
 	Long:  "Send files to localsend instance",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if ip == "" {
+		if ip == "" && !useDownloadAPI {
 			return errors.New("IP address is required")
 		}
 		if file == "" {
@@ -67,13 +68,23 @@ var Cmd = &cobra.Command{
 			}
 		}
 
+		go func() {
+			<-utils.WaitForSignal()
+
+			slog.Info("Abort")
+			err := sender.Cancel()
+			if err != nil {
+				slog.Error("Fail to cancel", "error", err)
+				return
+			}
+		}()
+
 		err = sender.Start()
 		if err != nil {
 			slog.Error("Fail to send", "error", err)
 			return nil
 		}
 
-		slog.Info("Finish", "file", file)
 		return nil
 	},
 }

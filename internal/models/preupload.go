@@ -5,6 +5,17 @@ type PreUploadReq struct {
 	Files FileMetas   `json:"files"`
 }
 
+type PreDownloadResp struct {
+	PreUploadReq
+	SessionId string `json:"sessionId"`
+}
+
+func NewPreDownloadResp(sessionId string) *PreDownloadResp {
+	return &PreDownloadResp{
+		SessionId: sessionId,
+	}
+}
+
 type FileMetas map[string]FileMeta
 
 type PreUploadResp struct {
