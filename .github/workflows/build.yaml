@@ -1,4 +1,4 @@
-name: Build and Push Image
+name: Build and Release
 on:
   release:
     types:
@@ -26,3 +26,5 @@ jobs:
           ldflags: "-s -w"
           binary_name: localsend
           build_flags: "-trimpath"
+          md5sum: false
+          sha256sum: true
