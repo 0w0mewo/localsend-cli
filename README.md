@@ -36,10 +36,11 @@ Usage:
   localsend recv [flags]
 
 Flags:
-  -n, --devname string   Device name that is advertising (default "localsend-cli")
+  -n, --devname string   Device name that is advertising (default "Strategic Papaya")
   -d, --dir string       Directory for received files (default ".")
   -h, --help             help for recv
       --https            Do https (default true)
+  -p, --pin string       PIN code
 ```
 
 `send` command
@@ -50,10 +51,13 @@ Usage:
   localsend send [flags]
 
 Flags:
+      --dapi          Use Download API(Reverse File Transfer)
   -f, --file string   File/Directory to be sent
   -h, --help          help for send
       --https         Do https (default true)
-  -p, --ip string     IP address of remote localsend instance
+      --ip string     IP address of remote localsend instance
+  -p, --pin string    PIN code
+
 ```
 
 `scan` command
@@ -66,5 +70,5 @@ Usage:
 
 Flags:
   -h, --help          help for scan
-  -t, --timeout int   scan duration in seconds (default 2)
+  -t, --timeout int   scan duration in seconds (default 4)
 ```
