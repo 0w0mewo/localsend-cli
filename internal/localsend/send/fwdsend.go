@@ -1,4 +1,4 @@
-package localsend
+package send
 
 import (
 	"bytes"
@@ -11,12 +11,15 @@ import (
 	"os"
 	"path/filepath"
 
-	lserrors "github.com/0w0mewo/localsend-cli/internal/localsend/errors"
+	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
+	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 )
 
-type FileSender struct {
+var httpClient = lsutils.HttpClient
+
+type ForwardSender struct {
 	remote  *models.DeviceInfo
 	tokens  map[string]string
 	files   map[string]models.FileMeta
@@ -26,18 +29,18 @@ type FileSender struct {
 	pin     string
 }
 
-func NewFileSender() *FileSender {
-	return &FileSender{
+func NewForwardSender() *ForwardSender {
+	return &ForwardSender{
 		files:  make(map[string]models.FileMeta),
 		tokens: make(map[string]string),
 	}
 }
 
-func (fsp *FileSender) SetPIN(pin string) {
+func (fsp *ForwardSender) SetPIN(pin string) {
 	fsp.pin = pin
 }
 
-func (fsp *FileSender) Init(target *models.DeviceInfo, https bool) error {
+func (fsp *ForwardSender) Init(target *models.DeviceInfo, https bool) error {
 	fsp.abort = false
 	fsp.session = ""
 
@@ -55,7 +58,7 @@ func (fsp *FileSender) Init(target *models.DeviceInfo, https bool) error {
 	return nil
 }
 
-func (fsp *FileSender) AddFile(filePath string) error {
+func (fsp *ForwardSender) AddFile(filePath string) error {
 	if fsp.files == nil {
 		fsp.files = make(map[string]models.FileMeta)
 	}
@@ -69,7 +72,7 @@ func (fsp *FileSender) AddFile(filePath string) error {
 	return nil
 }
 
-func (fsp *FileSender) AddDir(dirPath string) error {
+func (fsp *ForwardSender) AddDir(dirPath string) error {
 	return filepath.Walk(dirPath, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -83,13 +86,13 @@ func (fsp *FileSender) AddDir(dirPath string) error {
 	})
 }
 
-func (fsp *FileSender) preUploadReq() error {
+func (fsp *ForwardSender) preUploadReq() error {
 	scheme := "http"
 	if fsp.https {
 		scheme = "https"
 	}
 	remoteAddr := net.JoinHostPort(fsp.remote.IP, "53317")
-	base := filepath.Join(remoteAddr, PreuploadPath)
+	base := filepath.Join(remoteAddr, constants.PreuploadPath)
 
 	var pinQuery string
 	if fsp.pin != "" {
@@ -105,7 +108,7 @@ func (fsp *FileSender) preUploadReq() error {
 		}
 		fingerprint := utils.SHA256ofCert(certs[0]) // only check the first cert
 		if fingerprint != fsp.remote.Fingerprint {
-			return lserrors.ErrFingerprint
+			return constants.ErrFingerprint
 		}
 	}
 
@@ -131,7 +134,7 @@ func (fsp *FileSender) preUploadReq() error {
 	}
 	defer resp.Body.Close()
 
-	err = lserrors.ParseError(resp.StatusCode)
+	err = constants.ParseError(resp.StatusCode)
 	if err != nil {
 		return err
 	}
@@ -148,7 +151,7 @@ func (fsp *FileSender) preUploadReq() error {
 	return nil
 }
 
-func (fsp *FileSender) sendFile(fid string, ftoken string) error {
+func (fsp *ForwardSender) sendFile(fid string, ftoken string) error {
 	if fsp.abort {
 		return nil
 	}
@@ -158,12 +161,12 @@ func (fsp *FileSender) sendFile(fid string, ftoken string) error {
 		scheme = "https"
 	}
 	remoteAddr := net.JoinHostPort(fsp.remote.IP, "53317")
-	base := filepath.Join(remoteAddr, UploadPath)
+	base := filepath.Join(remoteAddr, constants.UploadPath)
 	url := fmt.Sprintf("%s://%s?sessionId=%s&fileId=%s&token=%s", scheme, base, fsp.session, fid, ftoken)
 
 	fmeta, ok := fsp.files[fid]
 	if !ok {
-		return lserrors.ErrUnknown // unlikely, but check it anyway
+		return constants.ErrUnknown // unlikely, but check it anyway
 	}
 
 	fd, err := os.Open(fmeta.FullPath)
@@ -182,10 +185,10 @@ func (fsp *FileSender) sendFile(fid string, ftoken string) error {
 	}
 	defer resp.Body.Close()
 
-	return lserrors.ParseError(resp.StatusCode)
+	return constants.ParseError(resp.StatusCode)
 }
 
-func (fsp *FileSender) Start() error {
+func (fsp *ForwardSender) Start() error {
 	err := fsp.preUploadReq()
 	if err != nil {
 		return fmt.Errorf("PreUpload %v", err)
@@ -202,13 +205,13 @@ func (fsp *FileSender) Start() error {
 	return nil
 }
 
-func (fsp *FileSender) Cancel() error {
+func (fsp *ForwardSender) Cancel() error {
 	scheme := "http"
 	if fsp.https {
 		scheme = "https"
 	}
 	remoteAddr := net.JoinHostPort(fsp.remote.IP, "53317")
-	base := filepath.Join(remoteAddr, CancelPath)
+	base := filepath.Join(remoteAddr, constants.CancelPath)
 	url := fmt.Sprintf("%s://%s?sessionId=%s", scheme, base, fsp.session)
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
@@ -225,5 +228,5 @@ func (fsp *FileSender) Cancel() error {
 		fsp.abort = true
 	}()
 
-	return lserrors.ParseError(resp.StatusCode)
+	return constants.ParseError(resp.StatusCode)
 }

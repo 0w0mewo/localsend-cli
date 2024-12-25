@@ -8,7 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	lserrors "github.com/0w0mewo/localsend-cli/internal/localsend/errors"
+	lserrors "github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/google/uuid"

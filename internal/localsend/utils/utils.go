@@ -1,4 +1,4 @@
-package localsend
+package utils
 
 import (
 	"crypto/rand"
@@ -6,27 +6,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"math/big"
-	"net"
 	"net/http"
-	"path/filepath"
 	"time"
-
-	"github.com/0w0mewo/localsend-cli/internal/localsend/errors"
-	"github.com/0w0mewo/localsend-cli/internal/models"
 )
 
-const (
-	UploadPath    = "/api/localsend/v2/upload"
-	PreuploadPath = "/api/localsend/v2/prepare-upload"
-	CancelPath    = "/api/localsend/v2/cancel"
-	InfoPath      = "/api/localsend/v2/info"
-)
-
-var httpClient = &http.Client{
+var HttpClient = &http.Client{
 	Timeout: 30 * time.Second,
 	Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{
@@ -35,7 +21,7 @@ var httpClient = &http.Client{
 	},
 }
 
-func genTLScert() (tls.Certificate, error) {
+func GenTLScert() (tls.Certificate, error) {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
@@ -71,30 +57,4 @@ func genTLScert() (tls.Certificate, error) {
 	})
 
 	return tls.X509KeyPair(certPem, certPrivKeyPem)
-}
-
-func GetDeviceInfo(ip string) (models.DeviceInfo, error) {
-	remoteAddr := net.JoinHostPort(ip, "53317")
-	base := filepath.Join(remoteAddr, InfoPath)
-	url := fmt.Sprintf("https://%s", base)
-
-	resp, err := httpClient.Get(url)
-	if err != nil {
-		return models.DeviceInfo{}, err
-	}
-
-	err = errors.ParseError(resp.StatusCode)
-	if err != nil {
-		return models.DeviceInfo{}, err
-	}
-	defer resp.Body.Close()
-
-	var res models.DeviceInfo
-	err = json.NewDecoder(resp.Body).Decode(&res)
-	if err != nil {
-		return models.DeviceInfo{}, err
-	}
-	res.IP = ip
-
-	return res, nil
 }

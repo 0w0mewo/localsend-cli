@@ -4,7 +4,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/0w0mewo/localsend-cli/internal/localsend"
+	lsrecv "github.com/0w0mewo/localsend-cli/internal/localsend/recv"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -21,7 +21,7 @@ var Cmd = &cobra.Command{
 	Short: "Receive files from localsend instance",
 	Long:  "Receive files from localsend instance",
 	Run: func(cmd *cobra.Command, args []string) {
-		recver := localsend.NewFileReceiver(devname, savetodir, supportHttps)
+		recver := lsrecv.NewFileReceiver(devname, savetodir, supportHttps)
 		recver.SetPIN(pin)
 		recver.Init()
 

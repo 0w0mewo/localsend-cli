@@ -1,4 +1,4 @@
-package localsend
+package recv
 
 import (
 	"crypto/tls"
@@ -6,6 +6,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0w0mewo/localsend-cli/internal/localsend"
+	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
+	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	sess "github.com/0w0mewo/localsend-cli/internal/session"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
@@ -21,7 +24,7 @@ type FileReceiver struct {
 	supportHttps bool
 	sessStore    *sync.Map
 	saveToDir    string
-	discoverier  *Discoverier
+	discoverier  *localsend.Discoverier
 	expectedPin  string
 	done         chan struct{}
 }
@@ -51,7 +54,7 @@ func (fr *FileReceiver) Init() error {
 	if fr.supportHttps {
 		slog.Info("Generating https certificate")
 		// generate cert for https server
-		fr.cert, err = genTLScert()
+		fr.cert, err = lsutils.GenTLScert()
 		if err != nil {
 			return err
 		}
@@ -61,7 +64,7 @@ func (fr *FileReceiver) Init() error {
 	}
 
 	// start advertisement
-	fr.discoverier, err = NewDiscoverier(fr.identity, fr.supportHttps)
+	fr.discoverier, err = localsend.NewDiscoverier(fr.identity, fr.supportHttps)
 	if err != nil {
 		return err
 	}
@@ -159,10 +162,10 @@ func (fr *FileReceiver) infoHandler(c *fiber.Ctx) error {
 
 func (fr *FileReceiver) Start() error {
 	server := fr.webServer
-	server.Post(PreuploadPath, fr.preUploadHandler)
-	server.Post(UploadPath, fr.uploadHandler)
-	server.Post(CancelPath, fr.cancelHandler)
-	server.Get(InfoPath, fr.infoHandler)
+	server.Post(constants.PreuploadPath, fr.preUploadHandler)
+	server.Post(constants.UploadPath, fr.uploadHandler)
+	server.Post(constants.CancelPath, fr.cancelHandler)
+	server.Get(constants.InfoPath, fr.infoHandler)
 	slog.Info("Waitting for receiving files (Ctrl-C to terminate)")
 
 	go fr.gc()
