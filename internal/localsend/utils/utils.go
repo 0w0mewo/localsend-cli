@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"math/big"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/utils"
@@ -93,7 +94,7 @@ var HttpClient = &http.Client{
 	},
 }
 
-func GenTLScert() (tls.Certificate, error) {
+func GenAndSaveTLScert(privKeyFile, certFile string) (tls.Certificate, error) {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
@@ -128,7 +129,28 @@ func GenTLScert() (tls.Certificate, error) {
 		Bytes: certBytes,
 	})
 
+	// save certificate
+	err = os.WriteFile(certFile, certPem, 0o640)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	// save private key
+	err = os.WriteFile(privKeyFile, certPrivKeyPem, 0o640)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
 	return tls.X509KeyPair(certPem, certPrivKeyPem)
+}
+
+func LoadOrGenTLScert(privKeyFile, certFile string) (tls.Certificate, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, privKeyFile)
+	if err == nil {
+		return cert, err
+	}
+
+	return GenAndSaveTLScert(privKeyFile, certFile)
 }
 
 func GenAlias() string {

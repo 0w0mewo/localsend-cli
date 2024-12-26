@@ -3,6 +3,8 @@ package recv
 import (
 	"crypto/tls"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -53,8 +55,12 @@ func (fr *FileReceiver) Init() error {
 
 	if fr.supportHttps {
 		slog.Info("Generating https certificate")
-		// generate cert for https server
-		fr.cert, err = lsutils.GenTLScert()
+
+		// load cert for https server
+		// TODO: save certificate in user config directory
+		privkeyFile := filepath.Join(os.TempDir(), "server.key.pem")
+		certFile := filepath.Join(os.TempDir(), "server.crt")
+		fr.cert, err = lsutils.LoadOrGenTLScert(privkeyFile, certFile)
 		if err != nil {
 			return err
 		}
