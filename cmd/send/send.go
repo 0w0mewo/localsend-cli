@@ -87,6 +87,7 @@ var Cmd = &cobra.Command{
 			return nil
 		}
 
+		slog.Info("Done")
 		return nil
 	},
 }

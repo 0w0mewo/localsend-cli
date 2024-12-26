@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
+	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/gofiber/fiber/v2"
@@ -16,23 +17,18 @@ import (
 )
 
 type ReverseSender struct {
-	pin       string
+	baseSender
 	local     *models.DeviceInfo
 	webServer *fiber.App
-	tokens    map[string]string
-	files     map[string]models.FileMeta
-	session   string
 }
 
 func NewReverseSender() *ReverseSender {
 	return &ReverseSender{
-		webServer: fiber.New(fiber.Config{
-			Prefork:               false,
-			DisableStartupMessage: true,
-			BodyLimit:             100 * 1024 * 1024 * 1024, // 100G
-		}),
-		tokens: make(map[string]string),
-		files:  make(map[string]models.FileMeta),
+		baseSender: baseSender{
+			tokens: make(map[string]string),
+			files:  make(map[string]models.FileMeta),
+		},
+		webServer: lsutils.NewWebServer(),
 	}
 }
 
@@ -44,13 +40,7 @@ func (rs *ReverseSender) Init(target *models.DeviceInfo, https bool) error {
 	rs.local = target
 	rs.session = uuid.NewString()
 
-	for k := range rs.tokens {
-		delete(rs.tokens, k)
-	}
-
-	for k := range rs.files {
-		delete(rs.files, k)
-	}
+	rs.reset()
 
 	return nil
 }

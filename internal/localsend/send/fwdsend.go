@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -20,70 +19,30 @@ import (
 var httpClient = lsutils.HttpClient
 
 type ForwardSender struct {
-	remote  *models.DeviceInfo
-	tokens  map[string]string
-	files   map[string]models.FileMeta
-	session string
-	https   bool
-	abort   bool
-	pin     string
+	baseSender
+	remote *models.DeviceInfo
+	https  bool
+	abort  bool
 }
 
 func NewForwardSender() *ForwardSender {
 	return &ForwardSender{
-		files:  make(map[string]models.FileMeta),
-		tokens: make(map[string]string),
+		baseSender: baseSender{
+			files:  make(map[string]models.FileMeta),
+			tokens: make(map[string]string),
+		},
 	}
-}
-
-func (fsp *ForwardSender) SetPIN(pin string) {
-	fsp.pin = pin
 }
 
 func (fsp *ForwardSender) Init(target *models.DeviceInfo, https bool) error {
 	fsp.abort = false
 	fsp.session = ""
-
-	for k := range fsp.tokens {
-		delete(fsp.tokens, k)
-	}
-
-	for k := range fsp.files {
-		delete(fsp.files, k)
-	}
-
 	fsp.remote = target
 	fsp.https = https
 
+	fsp.reset()
+
 	return nil
-}
-
-func (fsp *ForwardSender) AddFile(filePath string) error {
-	if fsp.files == nil {
-		fsp.files = make(map[string]models.FileMeta)
-	}
-
-	fileMeta, err := models.GenFileMeta(filePath)
-	if err != nil {
-		return err
-	}
-
-	fsp.files[fileMeta.Id] = fileMeta
-	return nil
-}
-
-func (fsp *ForwardSender) AddDir(dirPath string) error {
-	return filepath.Walk(dirPath, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		return fsp.AddFile(path)
-	})
 }
 
 func (fsp *ForwardSender) preUploadReq() error {

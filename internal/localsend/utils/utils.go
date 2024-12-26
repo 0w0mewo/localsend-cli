@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/utils"
+	"github.com/gofiber/fiber/v2"
 )
 
 var aliasAdj = []string{
@@ -158,4 +159,12 @@ func GenAlias() string {
 	fruit := utils.RandChoice(aliasFruit)
 
 	return adj + " " + fruit
+}
+
+func NewWebServer() *fiber.App {
+	return fiber.New(fiber.Config{
+		Prefork:               false,
+		DisableStartupMessage: true,
+		BodyLimit:             100 * 1024 * 1024 * 1024, // 100G
+	})
 }

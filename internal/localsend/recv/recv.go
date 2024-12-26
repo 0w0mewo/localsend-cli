@@ -33,12 +33,8 @@ type FileReceiver struct {
 
 func NewFileReceiver(devname string, saveToDir string, supportHttps bool) *FileReceiver {
 	return &FileReceiver{
-		identity: models.NewDeviceInfo(devname, ""),
-		webServer: fiber.New(fiber.Config{
-			Prefork:               false,
-			DisableStartupMessage: true,
-			BodyLimit:             100 * 1024 * 1024 * 1024, // 100G
-		}),
+		identity:     models.NewDeviceInfo(devname, ""),
+		webServer:    lsutils.NewWebServer(),
 		supportHttps: supportHttps,
 		sessStore:    &sync.Map{},
 		saveToDir:    saveToDir,
