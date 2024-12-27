@@ -10,9 +10,9 @@ import (
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend"
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
+	sess "github.com/0w0mewo/localsend-cli/internal/localsend/session"
 	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
-	sess "github.com/0w0mewo/localsend-cli/internal/session"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/gofiber/fiber/v2"
 	fiberutils "github.com/gofiber/fiber/v2/utils"
