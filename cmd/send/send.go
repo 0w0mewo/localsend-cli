@@ -15,7 +15,7 @@ import (
 
 var (
 	ip             string
-	file           string
+	files          []string
 	supportHttps   bool
 	pin            string
 	useDownloadAPI bool
@@ -29,16 +29,11 @@ var Cmd = &cobra.Command{
 		if ip == "" && !useDownloadAPI {
 			return errors.New("IP address is required")
 		}
-		if file == "" {
+		if files == nil || len(files) < 1 {
 			return errors.New("File is required")
 		}
-		finfo, err := os.Stat(file)
-		if err != nil {
-			slog.Error("Fail to get file info", "error", err)
-			return nil
-		}
 
-		slog.Info("Start sending", "file", file)
+		var err error
 
 		// only request remote device info when download api is unused
 		var devinfo models.DeviceInfo
@@ -56,18 +51,28 @@ var Cmd = &cobra.Command{
 		sender.SetPIN(pin)
 		sender.Init(&devinfo, supportHttps)
 
-		if finfo.IsDir() {
-			err = sender.AddDir(file)
+		// try to add every file
+		for _, file := range files {
+			finfo, err := os.Stat(file)
 			if err != nil {
-				slog.Error("Fail to add dir ", "error", err)
-				return nil
+				slog.Error("Fail to probe file", "file", file, "error", err)
+				continue
 			}
-		} else {
-			err = sender.AddFile(file)
-			if err != nil {
-				slog.Error("Fail to add file ", "error", err)
-				return nil
+			if finfo.IsDir() {
+				err = sender.AddDir(file)
+				if err != nil {
+					slog.Error("Fail to add dir, skipping...", "dir", file, "error", err)
+					continue
+				}
+			} else {
+				err = sender.AddFile(file)
+				if err != nil {
+					slog.Error("Fail to add file, skipping...", "file", file, "error", err)
+					continue
+
+				}
 			}
+			slog.Info("Start sending", "file", file)
 		}
 
 		go func() {
@@ -94,7 +99,7 @@ var Cmd = &cobra.Command{
 
 func init() {
 	Cmd.PersistentFlags().StringVar(&ip, "ip", "", "IP address of remote localsend instance")
-	Cmd.PersistentFlags().StringVarP(&file, "file", "f", "", "File/Directory to be sent")
+	Cmd.PersistentFlags().StringSliceVarP(&files, "file", "f", []string{}, "File/Directory to be sent")
 	Cmd.PersistentFlags().BoolVar(&supportHttps, "https", true, "Do https")
 	Cmd.PersistentFlags().BoolVar(&useDownloadAPI, "dapi", false, "Use Download API(Reverse File Transfer)")
 	Cmd.PersistentFlags().StringVarP(&pin, "pin", "p", "", "PIN code")
