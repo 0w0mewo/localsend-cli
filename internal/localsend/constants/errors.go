@@ -15,6 +15,7 @@ var (
 	ErrFileIO          = errors.New("File IO")
 	ErrChecksum        = errors.New("sha256 mismatch")
 	ErrFingerprint     = errors.New("Fingerprint mismatch")
+	ErrNotFound        = errors.New("Not Found")
 )
 
 func ParseError(status int) error {
@@ -27,6 +28,8 @@ func ParseError(status int) error {
 		return ErrInvalidBody
 	case 401:
 		return ErrInvalidPIN
+	case 404:
+		return ErrNotFound
 	case 403:
 		return ErrRejected
 	case 409:
@@ -50,6 +53,8 @@ func Status(err error) int {
 		return 401
 	case ErrRejected:
 		return 403
+	case ErrNotFound:
+		return 404
 	case ErrBlockedByOthers:
 		return 409
 	case ErrTooManyReq:

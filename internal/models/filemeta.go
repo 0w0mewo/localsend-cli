@@ -15,7 +15,6 @@ type FileMeta struct {
 	FileMIME string `json:"fileType"`
 	Checksum string `json:"sha256"`
 	FullPath string `json:"-"`
-	Token    string `json:"-"`
 }
 
 func GenFileMeta(fpath string) (FileMeta, error) {

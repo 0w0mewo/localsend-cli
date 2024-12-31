@@ -17,8 +17,8 @@ type FileSender interface {
 }
 
 type baseSender struct {
-	tokens  map[string]string
-	files   map[string]models.FileMeta
+	tokens  models.FileTokens
+	files   models.FileMetas
 	session string
 	pin     string
 }

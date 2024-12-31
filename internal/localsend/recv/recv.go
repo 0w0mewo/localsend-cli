@@ -2,11 +2,10 @@ package recv
 
 import (
 	"crypto/tls"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"sync"
-	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend"
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
@@ -15,8 +14,6 @@ import (
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/gofiber/fiber/v2"
-	fiberutils "github.com/gofiber/fiber/v2/utils"
-	"github.com/google/uuid"
 )
 
 type FileReceiver struct {
@@ -24,11 +21,10 @@ type FileReceiver struct {
 	identity     models.DeviceInfo
 	webServer    *fiber.App
 	supportHttps bool
-	sessStore    *sync.Map
+	sessman      *sess.RecvSessManager
 	saveToDir    string
 	discoverier  *localsend.Discoverier
 	expectedPin  string
-	done         chan struct{}
 }
 
 func NewFileReceiver(devname string, saveToDir string, supportHttps bool) *FileReceiver {
@@ -36,9 +32,8 @@ func NewFileReceiver(devname string, saveToDir string, supportHttps bool) *FileR
 		identity:     models.NewDeviceInfo(devname, ""),
 		webServer:    lsutils.NewWebServer(),
 		supportHttps: supportHttps,
-		sessStore:    &sync.Map{},
 		saveToDir:    saveToDir,
-		done:         make(chan struct{}),
+		sessman:      sess.NewRecvSessManager(),
 	}
 }
 
@@ -48,6 +43,12 @@ func (fr *FileReceiver) SetPIN(pin string) {
 
 func (fr *FileReceiver) Init() error {
 	var err error
+
+	// ensure save directory exists
+	err = os.MkdirAll(fr.saveToDir, fs.ModePerm)
+	if err != nil {
+		return err
+	}
 
 	if fr.supportHttps {
 		slog.Info("Generating https certificate")
@@ -74,94 +75,6 @@ func (fr *FileReceiver) Init() error {
 	return err
 }
 
-func (fr *FileReceiver) preUploadHandler(c *fiber.Ctx) error {
-	// check pin if it's set
-	if fr.expectedPin != "" {
-		pin := c.Query("pin")
-		if pin != fr.expectedPin {
-			return c.SendStatus(403)
-		}
-	}
-
-	var metaReq models.PreUploadReq
-
-	err := c.BodyParser(&metaReq)
-	if err != nil {
-		return c.SendStatus(400)
-	}
-
-	// assign session
-	sessionId := uuid.NewString()
-	session, err := sess.NewRecvSession(fr.saveToDir, sessionId)
-	if err != nil {
-		slog.Error("preupload error", "error", err)
-		return c.SendStatus(500)
-	}
-	session.RemoteIP = fiberutils.CopyString(c.IP()) // strings in fiber are unsafe due to zero allocation
-
-	// accept every files the client claimed
-	for fileId, FileMeta := range metaReq.Files {
-		err = session.AddFileMeta(fileId, FileMeta)
-		if err != nil {
-			return c.SendStatus(409)
-		}
-	}
-
-	// register session
-	fr.sessStore.Store(sessionId, session)
-	session.Start()
-
-	slog.Info("Accepting file", "remote", session.RemoteIP, "session", sessionId)
-
-	resp := session.GenPreUploadResp()
-	return c.JSON(resp)
-}
-
-func (fr *FileReceiver) uploadHandler(c *fiber.Ctx) error {
-	sessionId := c.Query("sessionId")
-	fileId := c.Query("fileId")
-	token := c.Query("token")
-
-	if sessionId == "" || fileId == "" || token == "" {
-		return c.SendStatus(400)
-	}
-
-	v, exist := fr.sessStore.Load(sessionId)
-	session := v.(*sess.RecvSession)
-	if session == nil || !exist {
-		return c.SendStatus(404)
-	}
-
-	err := session.SaveFile(fileId, token, c.Body())
-	if err != nil {
-		slog.Error("Upload error", "remote", session.RemoteIP, "session", sessionId, "error", err)
-		return c.SendStatus(500)
-	}
-
-	return c.SendStatus(200)
-}
-
-func (fr *FileReceiver) cancelHandler(c *fiber.Ctx) error {
-	sessionId := c.Query("sessionId")
-	if sessionId == "" {
-		return c.SendStatus(400)
-	}
-
-	// remove session
-	v, exist := fr.sessStore.LoadAndDelete(sessionId)
-	sess := v.(*sess.RecvSession)
-	if sess == nil || !exist {
-		return c.SendStatus(404)
-	}
-	sess.End()
-
-	return c.SendStatus(200)
-}
-
-func (fr *FileReceiver) infoHandler(c *fiber.Ctx) error {
-	return c.JSON(&fr.identity)
-}
-
 func (fr *FileReceiver) Start() error {
 	server := fr.webServer
 	server.Post(constants.PreuploadPath, fr.preUploadHandler)
@@ -170,7 +83,6 @@ func (fr *FileReceiver) Start() error {
 	server.Get(constants.InfoPath, fr.infoHandler)
 	slog.Info("Waitting for receiving files (Ctrl-C to terminate)")
 
-	go fr.gc()
 	go fr.advertise() // let others know we are here
 
 	if fr.supportHttps {
@@ -188,34 +100,5 @@ func (fr *FileReceiver) Stop() error {
 	slog.Info("Stop receiving")
 
 	fr.discoverier.Shutdown()
-	fr.done <- struct{}{}
 	return fr.webServer.Shutdown()
-}
-
-func (fr *FileReceiver) gc() {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-fr.done:
-			return
-
-		// remove every finished session every 5 seconds
-		case <-ticker.C:
-			fr.sessStore.Range(func(key, value any) bool {
-				sessionId := key.(string)
-				session := value.(*sess.RecvSession)
-
-				if session.Finished() {
-					session.End()
-					fr.sessStore.Delete(sessionId)
-
-					slog.Debug("Remove finished session", "remote", session.RemoteIP, "session", sessionId)
-				}
-
-				return true
-			})
-		}
-	}
 }

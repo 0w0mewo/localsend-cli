@@ -1,7 +1,6 @@
 package session
 
 import (
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -15,35 +14,29 @@ import (
 )
 
 type RecvSession struct {
-	saveToDir  string
-	fileMetas  *sync.Map
+	fileMetas  models.FileMetas
+	fileTokens models.FileTokens
+	mu         *sync.RWMutex
 	id         string
-	RemoteIP   string
-	locked     bool
-	valid      bool
+	started    bool
 	filesCount int64
 }
 
-func NewRecvSession(saveToDir string, sessionId string) (*RecvSession, error) {
+func NewRecvSession(sessionId string) (*RecvSession, error) {
 	sess := &RecvSession{
-		saveToDir: saveToDir,
-		fileMetas: &sync.Map{},
-		locked:    false,
-		valid:     true,
-		id:        sessionId,
-	}
-
-	// ensure saved dir exists
-	err := os.MkdirAll(sess.saveToDir, fs.ModePerm)
-	if err != nil {
-		return nil, err
+		fileMetas:  make(models.FileMetas),
+		fileTokens: make(models.FileTokens),
+		mu:         &sync.RWMutex{},
+		started:    false,
+		id:         sessionId,
 	}
 
 	return sess, nil
 }
 
-func (sess *RecvSession) AddFileMeta(fileId string, fileMeta models.FileMeta) error {
-	if sess.locked {
+func (sess *RecvSession) AcceptFile(fileId string, fileMeta models.FileMeta) error {
+	// reject upload request for a started session
+	if sess.started {
 		return lserrors.ErrBlockedByOthers
 	}
 
@@ -52,9 +45,13 @@ func (sess *RecvSession) AddFileMeta(fileId string, fileMeta models.FileMeta) er
 		return lserrors.ErrUnknown
 	}
 
-	// generate token and store the file metadata
-	fileMeta.Token = uuid.NewString()
-	sess.fileMetas.Store(fileId, fileMeta)
+	sess.mu.Lock()
+	// store the file metadata
+	sess.fileMetas[fileId] = fileMeta
+
+	// generate file token
+	sess.fileTokens[fileId] = uuid.NewString()
+	sess.mu.Unlock()
 
 	// increment files count
 	atomic.AddInt64(&sess.filesCount, 1)
@@ -62,68 +59,52 @@ func (sess *RecvSession) AddFileMeta(fileId string, fileMeta models.FileMeta) er
 	return nil
 }
 
-func (sess *RecvSession) GenPreUploadResp() *models.PreUploadResp {
-	resp := models.NewPreUploadResp(sess.id)
-
-	sess.fileMetas.Range(func(key, value any) bool {
-		filedId := key.(string)
-		fileMeta := value.(models.FileMeta)
-		resp.AddFile(filedId, fileMeta.Token)
-
-		return true
-	})
-
-	return resp
-}
-
 func (sess *RecvSession) Start() {
-	// reject upload request for this session
-	sess.locked = true
-	sess.valid = true
+	sess.started = true
 }
 
-func (sess *RecvSession) SaveFile(fileId string, token string, fileData []byte) error {
+func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string, fileData []byte) error {
 	if sess.id == "" || fileId == "" || token == "" {
 		return lserrors.ErrInvalidBody
 	}
 
-	if !sess.valid {
+	// if a session is not started, it means the session is invalid
+	if !sess.started {
 		return lserrors.ErrRejected
 	}
 
-	// validate stored file token with the given one
-	v, exist := sess.fileMetas.Load(fileId)
-	meta, ok := v.(models.FileMeta)
-	if !ok {
-		return lserrors.ErrUnknown // unlikely, but check it anyway
-	}
-	if !exist || meta.Token != token {
+	sess.mu.RLock()
+	expectedMeta, metaExist := sess.fileMetas[fileId]
+	expectedToken, tokenExist := sess.fileTokens[fileId]
+	sess.mu.RUnlock()
+
+	// validate
+	if !metaExist || !tokenExist || expectedToken != token {
 		return lserrors.ErrRejected
 	}
 
 	// write the file data to disk
-	saveAs := filepath.Join(sess.saveToDir, meta.Filename)
+	saveAs := filepath.Join(saveToDir, expectedMeta.Filename)
 	err := os.WriteFile(saveAs, fileData, 0o640)
 	if err != nil {
 		return lserrors.ErrFileIO
 	}
 
 	// calculate checksum if it's provided
-	if meta.Checksum != "" {
+	if expectedMeta.Checksum != "" {
 		checksum, err := utils.SHA256ofFile(saveAs)
 		if err != nil {
 			return lserrors.ErrChecksum
 		}
 
-		if checksum != meta.Checksum {
+		if checksum != expectedMeta.Checksum {
 			return lserrors.ErrChecksum
 		}
 	}
 
-	slog.Info("Recv file", "file", meta.Filename, "session", sess.id)
+	slog.Info("Recv file", "file", expectedMeta.Filename, "session", sess.id)
 
-	// remove finished file info
-	sess.fileMetas.Delete(fileId)
+	// remove finished file
 	atomic.AddInt64(&sess.filesCount, -1)
 
 	// end this session if it is the last file it received
@@ -134,16 +115,24 @@ func (sess *RecvSession) SaveFile(fileId string, token string, fileData []byte) 
 	return nil
 }
 
+func (sess *RecvSession) FileTokens() models.FileTokens {
+	sess.mu.RLock()
+	defer sess.mu.RUnlock()
+
+	return sess.fileTokens
+}
+
 func (sess *RecvSession) End() {
-	if sess.locked && sess.valid { // make sure it ends once
-		sess.locked = false
-		sess.valid = false
-		sess.fileMetas.Clear()
+	if sess.started { // make sure it ends once
+		sess.started = false
+		atomic.StoreInt64(&sess.filesCount, 0)
 
 		slog.Info("Session done", "session", sess.id)
 	}
 }
 
-func (sess *RecvSession) Finished() bool {
-	return (!sess.locked) && (!sess.valid)
+func (sess *RecvSession) Stopped() bool {
+	fileLefts := atomic.LoadInt64(&sess.filesCount)
+
+	return (!sess.started) || (fileLefts == 0)
 }

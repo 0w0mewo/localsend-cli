@@ -19,17 +19,8 @@ func NewPreDownloadResp(sessionId string) *PreDownloadResp {
 type FileMetas map[string]FileMeta
 
 type PreUploadResp struct {
-	SessionId  string            `json:"sessionId"`
-	FileTokens map[string]string `json:"files"`
+	SessionId string     `json:"sessionId"`
+	Tokens    FileTokens `json:"files"`
 }
 
-func NewPreUploadResp(sessionId string) *PreUploadResp {
-	return &PreUploadResp{
-		SessionId:  sessionId,
-		FileTokens: make(map[string]string),
-	}
-}
-
-func (pur *PreUploadResp) AddFile(fileId, token string) {
-	pur.FileTokens[fileId] = token
-}
+type FileTokens map[string]string

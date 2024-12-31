@@ -105,7 +105,7 @@ func (fsp *ForwardSender) preUploadReq() error {
 	}
 
 	fsp.session = respMeta.SessionId
-	fsp.tokens = respMeta.FileTokens
+	fsp.tokens = respMeta.Tokens
 
 	return nil
 }

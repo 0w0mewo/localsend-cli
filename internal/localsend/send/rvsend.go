@@ -2,11 +2,9 @@ package send
 
 import (
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net"
 	"os"
-	"path/filepath"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
@@ -32,10 +30,6 @@ func NewReverseSender() *ReverseSender {
 	}
 }
 
-func (rs *ReverseSender) SetPIN(pin string) {
-	rs.pin = pin
-}
-
 func (rs *ReverseSender) Init(target *models.DeviceInfo, https bool) error {
 	rs.local = target
 	rs.session = uuid.NewString()
@@ -43,34 +37,6 @@ func (rs *ReverseSender) Init(target *models.DeviceInfo, https bool) error {
 	rs.reset()
 
 	return nil
-}
-
-func (rs *ReverseSender) AddFile(filePath string) error {
-	if rs.files == nil {
-		rs.files = make(map[string]models.FileMeta)
-	}
-
-	fileMeta, err := models.GenFileMeta(filePath)
-	if err != nil {
-		return err
-	}
-
-	rs.files[fileMeta.Id] = fileMeta
-	return nil
-}
-
-func (rs *ReverseSender) AddDir(dirPath string) error {
-	return filepath.Walk(dirPath, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		return rs.AddFile(path)
-	})
 }
 
 func (rs *ReverseSender) predownloadHandler(c *fiber.Ctx) error {
