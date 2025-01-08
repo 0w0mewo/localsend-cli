@@ -10,14 +10,21 @@ import (
 	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
+	"github.com/0w0mewo/localsend-cli/templates"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
+
+type DownloadEntry struct {
+	Filename string
+	Url      string
+}
 
 type ReverseSender struct {
 	baseSender
 	local     *models.DeviceInfo
 	webServer *fiber.App
+	downloads []DownloadEntry
 }
 
 func NewReverseSender() *ReverseSender {
@@ -26,7 +33,8 @@ func NewReverseSender() *ReverseSender {
 			tokens: make(map[string]string),
 			files:  make(map[string]models.FileMeta),
 		},
-		webServer: lsutils.NewWebServer(),
+		webServer: lsutils.NewWebServer(true),
+		downloads: make([]DownloadEntry, 0),
 	}
 }
 
@@ -86,6 +94,11 @@ func (rs *ReverseSender) Start() error {
 	server := rs.webServer
 	server.Post(constants.PreDownloadPath, rs.predownloadHandler)
 	server.Get(constants.DownloadPath, rs.downloadHandler)
+	server.Get("/", func(c *fiber.Ctx) error {
+		return c.Render(templates.DownloadListTemp, fiber.Map{
+			"Files": rs.downloads,
+		})
+	})
 
 	ip, err := utils.GetMyIPv4Addr()
 	if err != nil {
@@ -94,13 +107,21 @@ func (rs *ReverseSender) Start() error {
 
 	slog.Info("Start reverse sending server")
 
+	// build downloads list
 	for idx := range ip {
-		for fileId := range rs.files {
-			host := net.JoinHostPort(ip[idx].String(), "53317")
-			fmt.Fprintf(os.Stdout, "Visit url to fetch file: http://%s%s?sessionId=%s&fileId=%s\n",
-				host, constants.DownloadPath, rs.session, fileId)
+		host := net.JoinHostPort(ip[idx].String(), "53317")
+
+		for fileId, fileMeta := range rs.files {
+			rs.downloads = append(rs.downloads, DownloadEntry{
+				Filename: fileMeta.Filename,
+				Url: fmt.Sprintf("http://%s%s?sessionId=%s&fileId=%s",
+					host, constants.DownloadPath, rs.session, fileId),
+			})
 		}
+
+		fmt.Fprintf(os.Stdout, "Vist http://%s to download files\n", host)
 	}
+
 	return server.Listen("0.0.0.0:53317")
 }
 

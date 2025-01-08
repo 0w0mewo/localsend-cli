@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/0w0mewo/localsend-cli/internal/utils"
+	"github.com/google/uuid"
 )
 
 type FileMeta struct {
@@ -34,7 +35,7 @@ func GenFileMeta(fpath string) (FileMeta, error) {
 	}
 
 	return FileMeta{
-		Id:       fd.Name(),
+		Id:       uuid.NewString(),
 		Filename: fd.Name(),
 		Size:     fd.Size(),
 		FileMIME: fileType,

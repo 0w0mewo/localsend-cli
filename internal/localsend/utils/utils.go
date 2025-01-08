@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/utils"
+	"github.com/0w0mewo/localsend-cli/templates"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/template/html/v2"
 )
 
 var aliasAdj = []string{
@@ -161,10 +163,18 @@ func GenAlias() string {
 	return adj + " " + fruit
 }
 
-func NewWebServer() *fiber.App {
-	return fiber.New(fiber.Config{
+func NewWebServer(withTemplateEngine ...bool) *fiber.App {
+	config := fiber.Config{
 		Prefork:               false,
 		DisableStartupMessage: true,
 		BodyLimit:             100 * 1024 * 1024 * 1024, // 100G
-	})
+	}
+
+	if len(withTemplateEngine) > 0 {
+		if withTemplateEngine[0] {
+			config.Views = html.NewFileSystem(http.FS(templates.TemplatesFS), ".html")
+		}
+	}
+
+	return fiber.New(config)
 }

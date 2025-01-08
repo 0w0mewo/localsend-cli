@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Download list </title>
+        <meta name="description">
+    </head>
+    <body>
+      <h1>Download list</h1>
+      <ul>
+        {{range .Files}}
+        <li>
+          <a href={{.Url}}>{{.Filename}}</a>
+        </li>
+        {{end}}
+      </ul>
+    </body>
+</html>
