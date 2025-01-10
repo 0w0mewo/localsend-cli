@@ -2,34 +2,41 @@ package localsend
 
 import (
 	"encoding/json"
-	"fmt"
 	"net"
-	"path/filepath"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	"github.com/0w0mewo/localsend-cli/internal/localsend/send"
-	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
+	"github.com/gofiber/fiber/v2"
 )
 
 func GetDeviceInfo(ip string) (models.DeviceInfo, error) {
 	remoteAddr := net.JoinHostPort(ip, "53317")
-	base := filepath.Join(remoteAddr, constants.InfoPath)
-	url := fmt.Sprintf("https://%s", base)
 
-	resp, err := lsutils.HttpClient.Get(url)
+	agent := fiber.AcquireAgent()
+	defer fiber.ReleaseAgent(agent)
+
+	req := agent.Request()
+	req.URI().SetScheme("https")
+	req.URI().SetHost(remoteAddr)
+	req.URI().SetPath(constants.InfoPath)
+	req.Header.SetMethod(fiber.MethodGet)
+	err := agent.Parse()
 	if err != nil {
 		return models.DeviceInfo{}, err
 	}
 
-	err = constants.ParseError(resp.StatusCode)
+	status, b, errs := agent.InsecureSkipVerify().Bytes()
+	if len(errs) != 0 {
+		return models.DeviceInfo{}, errs[0]
+	}
+	err = constants.ParseError(status)
 	if err != nil {
 		return models.DeviceInfo{}, err
 	}
-	defer resp.Body.Close()
 
 	var res models.DeviceInfo
-	err = json.NewDecoder(resp.Body).Decode(&res)
+	err = json.Unmarshal(b, &res)
 	if err != nil {
 		return models.DeviceInfo{}, err
 	}

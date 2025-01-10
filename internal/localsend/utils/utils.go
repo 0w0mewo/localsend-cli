@@ -88,15 +88,6 @@ var aliasFruit = []string{
 	"Tomato",
 }
 
-var HttpClient = &http.Client{
-	Timeout: 30 * time.Second,
-	Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	},
-}
-
 func GenAndSaveTLScert(privKeyFile, certFile string) (tls.Certificate, error) {
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
