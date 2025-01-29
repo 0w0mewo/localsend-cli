@@ -85,6 +85,7 @@ func (rs *ReverseSender) downloadHandler(c *fiber.Ctx) error {
 		slog.Info("Fail to send file", "file", fileMeta.Filename)
 		return c.SendStatus(500)
 	}
+	c.Set(fiber.HeaderContentDisposition, fmt.Sprintf(`attachment; filename="%s"`, fileMeta.Filename))
 
 	slog.Info("File sent", "file", fileMeta.Filename, "recv", c.IP())
 	return c.SendStatus(200)
