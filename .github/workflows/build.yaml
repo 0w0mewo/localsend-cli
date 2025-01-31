@@ -9,7 +9,6 @@ jobs:
   build:
     name: release
     runs-on: ubuntu-latest
-    container: catthehacker/ubuntu:act-latest
     strategy:
       matrix:
         goos: [linux, windows, darwin]
