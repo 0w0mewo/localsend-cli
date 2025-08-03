@@ -23,7 +23,7 @@ jobs:
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
           goversion: 1.23
-          ldflags: "-s -w"
+          ldflags: "-s -w -X github.com/0w0mewo/localsend-cli/cmd.version=${{ vars.VERSION }}"
           binary_name: localsend
           build_flags: "-trimpath"
           md5sum: false

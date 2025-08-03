@@ -11,12 +11,15 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "localsend",
-	Short: "LocalSend CLI",
-	Long:  "LocalSend CLI",
+	Use:     "localsend",
+	Short:   "LocalSend CLI",
+	Long:    "LocalSend CLI",
+	Version: version,
 }
 
 func Execute() {
+	rootCmd.SetVersionTemplate("{{ .Version }}\n")
+
 	err := rootCmd.Execute()
 	if err != nil {
 		slog.Error("Fail to execute", "error", err)
