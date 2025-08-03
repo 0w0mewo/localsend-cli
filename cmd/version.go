@@ -1,3 +1,3 @@
 package cmd
 
-const version = "dev"
+var version = "dev"
