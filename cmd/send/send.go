@@ -22,14 +22,15 @@ var (
 )
 
 var Cmd = &cobra.Command{
-	Use:   "send",
+	Use:   "send [files]...",
 	Short: "Send files to localsend instance",
 	Long:  "Send files to localsend instance",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if ip == "" && !useDownloadAPI {
 			return errors.New("IP address is required")
 		}
-		if files == nil || len(files) < 1 {
+		files = append(files, args...)
+		if len(files) == 0 {
 			return errors.New("File is required")
 		}
 
