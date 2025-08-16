@@ -80,8 +80,8 @@ func (fr *FileReceiver) Start() error {
 	server.Post(constants.PreuploadPath, fr.preUploadHandler)
 	server.Post(constants.UploadPath, fr.uploadHandler)
 	server.Post(constants.CancelPath, fr.cancelHandler)
-	server.Get(constants.InfoPath, fr.infoHandler)
-	slog.Info("Waitting for receiving files (Ctrl-C to terminate)")
+	server.Post(constants.InfoPath, fr.infoHandler)
+	server.Get(constants.InfoPathLegacy, fr.infoHandler)
 
 	go fr.advertise() // let others know we are here
 

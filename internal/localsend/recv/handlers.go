@@ -12,7 +12,7 @@ func (fr *FileReceiver) preUploadHandler(c *fiber.Ctx) error {
 	if fr.expectedPin != "" {
 		pin := c.Query("pin")
 		if pin != fr.expectedPin {
-			return c.SendStatus(403)
+			return c.SendStatus(401)
 		}
 	}
 
