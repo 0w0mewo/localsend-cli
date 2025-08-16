@@ -82,6 +82,7 @@ func (fr *FileReceiver) Start() error {
 	server.Post(constants.CancelPath, fr.cancelHandler)
 	server.Post(constants.InfoPath, fr.infoHandler)
 	server.Get(constants.InfoPathLegacy, fr.infoHandler)
+	slog.Info("Waitting for receiving files (Ctrl-C to terminate)")
 
 	go fr.advertise() // let others know we are here
 
