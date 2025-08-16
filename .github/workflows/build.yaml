@@ -26,5 +26,7 @@ jobs:
           ldflags: "-s -w -X github.com/0w0mewo/localsend-cli/cmd.version=${{ vars.VERSION }}"
           binary_name: localsend
           build_flags: "-trimpath"
+          pre_command: |
+            export CGO_ENABLE=0
           md5sum: false
           sha256sum: true
