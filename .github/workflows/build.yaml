@@ -27,6 +27,6 @@ jobs:
           binary_name: localsend
           build_flags: "-trimpath"
           pre_command: |
-            export CGO_ENABLE=0
+            export CGO_ENABLED=0
           md5sum: false
           sha256sum: true
