@@ -1,74 +1,70 @@
-### LocalSend CLI
+## LocalSend for KOReader
 
-Simple CLI program that implements LocalSend v2 protocol
+A KOReader plugin that enables receiving files from other devices using the [LocalSend](https://localsend.org/) protocol. Send ebooks, documents, and other files directly to your e-reader from any device running LocalSend.
 
-#### Quickstart
-Scan the local network to find target: `localsend scan`
-Send file: `localsend send -f myfile -p xxx.xxx.xxx.xxx`
-Receive file: `localsend recv`
+### Features
 
-#### Command Reference
+- **Receive files wirelessly** - Accept files from phones, tablets, and computers running LocalSend
+- **File type filtering** - Accept only specific file types (epub, pdf, mobi, etc.) or allow all
+- **PIN protection** - Optionally require a PIN code for incoming transfers
+- **HTTPS support** - Secure file transfers with TLS encryption
+- **Auto-start** - Optionally start the server automatically when KOReader launches
+- **Transfer notifications** - Get notified when files are received
+- **Custom device name** - Set a recognizable name for your device on the network
+
+### Installation
+
+1. Download the latest release
+2. Extract `localsend.koplugin` to your KOReader plugins directory:
+   - Kindle: `/mnt/us/koreader/plugins/`
+   - Kobo: `/.adds/koreader/plugins/`
+   - Other devices: Check your KOReader installation path
+3. Restart KOReader
+
+### Usage
+
+1. Open KOReader and go to **Menu > Network > LocalSend**
+2. Configure your settings:
+   - **Save directory** - Where received files will be stored
+   - **Device name** - How your device appears to senders (leave empty for random name)
+   - **Allowed extensions** - Filter incoming files by type
+   - **PIN code** - Optional security for transfers
+3. Tap **Start server** to begin receiving files
+4. On your phone/computer, open LocalSend and send files to your e-reader
+
+### Settings
+
+| Setting | Description |
+|---------|-------------|
+| Save directory | Destination folder for received files |
+| Device name | Display name on the network (e.g., "My Kindle") |
+| Allowed extensions | Comma-separated list of accepted file types |
+| PIN code | Required PIN for incoming transfers (optional) |
+| Use HTTPS | Enable TLS encryption (recommended) |
+| Start with KOReader | Auto-start server on launch |
+
+### How It Works
+
+This plugin uses a lightweight LocalSend CLI implementation as its backend. The CLI handles the LocalSend v2 protocol including:
+
+- Multicast UDP device discovery
+- HTTPS/HTTP file transfer server
+- Certificate generation and management
+
+The KOReader frontend provides the user interface, settings management, and integrates with KOReader's file browser and notification system.
+
+### Building the Backend
+
+The backend CLI is written in Go. To build for ARM devices:
+
+```bash
+GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -ldflags="-s -w" -o localsend-armhf
 ```
-LocalSend CLI
 
-Usage:
-  localsend [command]
+### Compatibility
 
-Available Commands:
-  completion  Generate the autocompletion script for the specified shell
-  help        Help about any command
-  recv        Receive files from localsend instance
-  scan        Scan local network for localsend instance
-  send        Send files to localsend instance
+- **Kindle Paperwhite 12** - This has only been tested on my Kindle Paperwhite 12th generation. It should work on other devices supported by KOReader, but performance may vary. - The main sticking point should be building the localsend binary for the correct architure.
 
-Flags:
-  -h, --help   help for localsend
+### License
 
-Use "localsend [command] --help" for more information about a command.
-
-```
-
-`recv` command 
-```
-Receive files from localsend instance
-
-Usage:
-  localsend recv [flags]
-
-Flags:
-  -n, --devname string   Device name that is advertising (default "Strategic Papaya")
-  -d, --dir string       Directory for received files (default ".")
-  -h, --help             help for recv
-      --https            Do https (default true)
-  -p, --pin string       PIN code
-```
-
-`send` command
-```
-Send files to localsend instance
-
-Usage:
-  localsend send [flags]
-
-Flags:
-      --dapi          Use Download API(Reverse File Transfer)
-  -f, --file string   File/Directory to be sent
-  -h, --help          help for send
-      --https         Do https (default true)
-      --ip string     IP address of remote localsend instance
-  -p, --pin string    PIN code
-
-```
-
-`scan` command
-
-```
-Scan local network for localsend instance
-
-Usage:
-  localsend scan [flags]
-
-Flags:
-  -h, --help          help for scan
-  -t, --timeout int   scan duration in seconds (default 4)
-```
+MIT License

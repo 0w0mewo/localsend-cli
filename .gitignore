@@ -32,3 +32,6 @@ dist
 
 *.sh
 docker-compose.dev.yml
+
+# Binaries
+localsend-armhf
