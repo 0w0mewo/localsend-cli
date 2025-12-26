@@ -158,7 +158,8 @@ func NewWebServer(withTemplateEngine ...bool) *fiber.App {
 	config := fiber.Config{
 		Prefork:               false,
 		DisableStartupMessage: true,
-		BodyLimit:             100 * 1024 * 1024 * 1024, // 100G
+	//	BodyLimit:             100 * 1024 * 1024 * 1024, // 100G
+		BodyLimit:             1 * 1024 * 1024 * 1024, // 1G (for 32-bit)
 	}
 
 	if len(withTemplateEngine) > 0 {

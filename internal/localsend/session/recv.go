@@ -122,6 +122,14 @@ func (sess *RecvSession) FileTokens() models.FileTokens {
 	return sess.fileTokens
 }
 
+func (sess *RecvSession) GetFileMeta(fileId string) (models.FileMeta, bool) {
+	sess.mu.RLock()
+	defer sess.mu.RUnlock()
+
+	meta, ok := sess.fileMetas[fileId]
+	return meta, ok
+}
+
 func (sess *RecvSession) End() {
 	if sess.started { // make sure it ends once
 		sess.started = false
