@@ -92,8 +92,11 @@ func (ma *Discoverier) advertise() error {
 }
 
 func (ma *Discoverier) Shutdown() error {
+	// Close connection first to unblock any pending reads in readAndRegister(),
+	// allowing Listen() to return to the select and receive the stop signal
+	ma.mcastConn.Close()
 	ma.stop <- struct{}{}
-	return ma.mcastConn.Close()
+	return nil
 }
 
 func (mcs *Discoverier) readAndRegister() error {
