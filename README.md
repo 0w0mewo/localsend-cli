@@ -79,6 +79,17 @@ Or use the build script which builds both and creates release zips:
 
 Tested on Kindle Paperwhite 12 (armv7). Should work on other devices supported by KOReader - just download the correct architecture (armv7 or arm64) for your device.
 
+### Which architecture do I need?
+
+| Architecture | Devices |
+|--------------|---------|
+| **armv7** | Kindle (firmware ≥5.16.3), Kobo Clara HD/Libra H2O/Sage/Elipsa, reMarkable 2, PocketBook |
+| **arm64** | Kobo Clara Colour/BW (2024+), Kobo Libra Colour, reMarkable Paper Pro |
+
+> **Kindle users:** This plugin requires firmware 5.16.3 or newer (the same requirement as KOReader's `kindlehf` package). Older firmware uses a different floating-point ABI that isn't supported.
+
+**Not sure?** Try armv7 first.
+
 ### License
 
 MIT License
