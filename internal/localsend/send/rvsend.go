@@ -1,10 +1,12 @@
 package send
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
@@ -25,6 +27,8 @@ type ReverseSender struct {
 	local     *models.DeviceInfo
 	webServer *fiber.App
 	downloads []DownloadEntry
+	https     bool
+	cert      tls.Certificate
 }
 
 func NewReverseSender() *ReverseSender {
@@ -41,6 +45,18 @@ func NewReverseSender() *ReverseSender {
 func (rs *ReverseSender) Init(target *models.DeviceInfo, https bool) error {
 	rs.local = target
 	rs.session = uuid.NewString()
+	rs.https = https
+
+	if https {
+		privkeyFile := filepath.Join(os.TempDir(), "server.key.pem")
+		certFile := filepath.Join(os.TempDir(), "server.crt")
+		cert, err := lsutils.LoadOrGenTLScert(privkeyFile, certFile)
+		if err != nil {
+			return err
+		}
+		rs.cert = cert
+		rs.local.Fingerprint = utils.SHA256ofCert(cert.Leaf)
+	}
 
 	rs.reset()
 
@@ -106,7 +122,12 @@ func (rs *ReverseSender) Start() error {
 		return err
 	}
 
-	slog.Info("Start reverse sending server")
+	scheme := "http"
+	if rs.https {
+		scheme = "https"
+	}
+
+	slog.Info("Start reverse sending server", "https", rs.https)
 
 	// build downloads list
 	for idx := range ip {
@@ -115,14 +136,17 @@ func (rs *ReverseSender) Start() error {
 		for fileId, fileMeta := range rs.files {
 			rs.downloads = append(rs.downloads, DownloadEntry{
 				Filename: fileMeta.Filename,
-				Url: fmt.Sprintf("http://%s%s?sessionId=%s&fileId=%s",
-					host, constants.DownloadPath, rs.session, fileId),
+				Url: fmt.Sprintf("%s://%s%s?sessionId=%s&fileId=%s",
+					scheme, host, constants.DownloadPath, rs.session, fileId),
 			})
 		}
 
-		fmt.Fprintf(os.Stdout, "Vist http://%s to download files\n", host)
+		fmt.Fprintf(os.Stdout, "Visit %s://%s to download files\n", scheme, host)
 	}
 
+	if rs.https {
+		return server.ListenTLSWithCertificate("0.0.0.0:53317", rs.cert)
+	}
 	return server.Listen("0.0.0.0:53317")
 }
 

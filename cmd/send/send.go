@@ -9,7 +9,6 @@ import (
 	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -45,7 +44,7 @@ var Cmd = &cobra.Command{
 				return nil
 			}
 		} else {
-			devinfo = models.NewDeviceInfo(lsutils.GenAlias(), uuid.NewString())
+			devinfo = models.NewDeviceInfo(lsutils.GenAlias(), "")
 		}
 
 		sender := localsend.NewFileSender(useDownloadAPI)

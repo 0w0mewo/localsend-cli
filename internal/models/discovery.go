@@ -24,7 +24,7 @@ type DeviceInfo struct {
 func NewDeviceInfo(alias string, fingerprint string) DeviceInfo {
 	return DeviceInfo{
 		Alias:       alias,
-		Version:     "2.0",
+		Version:     "2.1",
 		DeviceModel: "LocalSend-CLI",
 		DeviceType:  "headless",
 		Fingerprint: fingerprint,

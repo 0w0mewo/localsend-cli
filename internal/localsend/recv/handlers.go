@@ -113,3 +113,19 @@ func (fr *FileReceiver) cancelHandler(c *fiber.Ctx) error {
 func (fr *FileReceiver) infoHandler(c *fiber.Ctx) error {
 	return c.JSON(&fr.identity)
 }
+
+func (fr *FileReceiver) registerHandler(c *fiber.Ctx) error {
+	var announcement models.Announcement
+	if err := c.BodyParser(&announcement); err != nil {
+		return c.SendStatus(400)
+	}
+
+	// Register the discovered device
+	announcement.IP = c.IP()
+	if fr.discoverier != nil {
+		fr.discoverier.RegisterDevice(announcement)
+	}
+
+	// Respond with our device info
+	return c.JSON(&fr.identity)
+}

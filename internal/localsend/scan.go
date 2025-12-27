@@ -163,3 +163,9 @@ func (mcs *Discoverier) PutDiscovered(ip string, anno models.Announcement) {
 
 	mcs.discoveried[ip] = anno
 }
+
+func (mcs *Discoverier) RegisterDevice(anno models.Announcement) {
+	if anno.IP != "" {
+		mcs.PutDiscovered(anno.IP, anno)
+	}
+}

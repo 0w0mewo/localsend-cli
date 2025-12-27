@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
+	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/gofiber/fiber/v2"
@@ -17,6 +18,7 @@ import (
 
 type ForwardSender struct {
 	baseSender
+	local  *models.DeviceInfo
 	remote *models.DeviceInfo
 	https  bool
 	abort  atomic.Bool
@@ -36,6 +38,10 @@ func (fsp *ForwardSender) Init(target *models.DeviceInfo, https bool) error {
 	fsp.session = ""
 	fsp.remote = target
 	fsp.https = https
+
+	// Create local device identity for sender
+	localInfo := models.NewDeviceInfo(lsutils.GenAlias(), "")
+	fsp.local = &localInfo
 
 	fsp.reset()
 
@@ -59,7 +65,7 @@ func (fsp *ForwardSender) preUploadReq() error {
 	}
 
 	var meta models.PreUploadReq
-	meta.Info = fsp.remote
+	meta.Info = fsp.local
 	meta.Files = fsp.files
 
 	// setup request
