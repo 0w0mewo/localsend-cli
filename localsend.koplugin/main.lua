@@ -135,6 +135,27 @@ function LocalSend:closeFirewall()
     end
 end
 
+function LocalSend:validateDeviceName(name)
+    -- Empty name is valid (will use random name)
+    if name == "" then
+        return true
+    end
+
+    -- Check length (reasonable limit)
+    if #name > 64 then
+        return false, _("Device name is too long (max 64 characters).")
+    end
+
+    -- Only allow alphanumeric, spaces, hyphens, underscores
+    -- This matches the style of generated aliases (e.g., "Special Pineapple")
+    -- and avoids shell injection and JSON encoding issues
+    if not name:match("^[%w%s%-_]+$") then
+        return false, _("Device name can only contain letters, numbers, spaces, hyphens, and underscores.")
+    end
+
+    return true
+end
+
 function LocalSend:validateSaveDir(path)
     -- Check if path exists
     if not util.pathExists(path) then
@@ -471,7 +492,16 @@ function LocalSend:showDeviceNameDialog(touchmenu_instance)
                     text = _("Save"),
                     is_enter_default = true,
                     callback = function()
-                        self.device_name = self.device_name_dialog:getInputText()
+                        local new_name = self.device_name_dialog:getInputText()
+                        local valid, err = self:validateDeviceName(new_name)
+                        if not valid then
+                            UIManager:show(InfoMessage:new{
+                                icon = "notice-warning",
+                                text = err,
+                            })
+                            return
+                        end
+                        self.device_name = new_name
                         G_reader_settings:saveSetting("LocalSend_device_name", self.device_name)
                         UIManager:close(self.device_name_dialog)
                         touchmenu_instance:updateItems()
