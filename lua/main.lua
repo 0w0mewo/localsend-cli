@@ -674,6 +674,7 @@ function LocalSend:addToMainMenu(menu_items)
                         return _("Start server")
                     end
                 end,
+                keep_menu_open = true,
                 callback = function(touchmenu_instance)
                     self:onToggleLocalSend()
                     ffiutil.sleep(1)
@@ -682,6 +683,7 @@ function LocalSend:addToMainMenu(menu_items)
             },
             {
                 text = _("Restart server"),
+                keep_menu_open = true,
                 enabled_func = function() return self:isRunning() end,
                 callback = function(touchmenu_instance)
                     self:restart()
@@ -785,6 +787,12 @@ end
 function LocalSend:onDispatcherRegisterActions()
     Dispatcher:registerAction("toggle_localsend_server",
         { category = "none", event = "ToggleLocalSend", title = _("Toggle LocalSend server"), general = true })
+end
+
+function LocalSend:onCloseWidget()
+    if self:isRunning() then
+        self:stopServer(true)
+    end
 end
 
 return LocalSend
