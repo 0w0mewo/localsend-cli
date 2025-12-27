@@ -1,6 +1,7 @@
 package recv
 
 import (
+	"bytes"
 	"log/slog"
 
 	"github.com/0w0mewo/localsend-cli/internal/models"
@@ -87,7 +88,7 @@ func (fr *FileReceiver) uploadHandler(c *fiber.Ctx) error {
 	// Get file metadata for logging
 	fileMeta, _ := session.GetFileMeta(fileId)
 
-	err = session.SaveFile(fr.saveToDir, fileId, token, c.Body())
+	err = session.SaveFile(fr.saveToDir, fileId, token, bytes.NewReader(c.Body()))
 	if err != nil {
 		slog.Error("Upload error", "remote", c.IP(), "session", sessionId, "error", err)
 		return c.SendStatus(500)

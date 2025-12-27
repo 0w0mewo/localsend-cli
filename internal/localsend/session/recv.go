@@ -1,6 +1,9 @@
 package session
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -9,25 +12,23 @@ import (
 
 	lserrors "github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	"github.com/0w0mewo/localsend-cli/internal/models"
-	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/google/uuid"
 )
 
 type RecvSession struct {
+	// filesCount must be first for 64-bit alignment on 32-bit ARM
+	filesCount int64
 	fileMetas  models.FileMetas
 	fileTokens models.FileTokens
-	mu         *sync.RWMutex
+	mu         sync.RWMutex
 	id         string
-	started    bool
-	filesCount int64
+	started    atomic.Bool
 }
 
 func NewRecvSession(sessionId string) (*RecvSession, error) {
 	sess := &RecvSession{
 		fileMetas:  make(models.FileMetas),
 		fileTokens: make(models.FileTokens),
-		mu:         &sync.RWMutex{},
-		started:    false,
 		id:         sessionId,
 	}
 
@@ -36,7 +37,7 @@ func NewRecvSession(sessionId string) (*RecvSession, error) {
 
 func (sess *RecvSession) AcceptFile(fileId string, fileMeta models.FileMeta) error {
 	// reject upload request for a started session
-	if sess.started {
+	if sess.started.Load() {
 		return lserrors.ErrBlockedByOthers
 	}
 
@@ -60,16 +61,16 @@ func (sess *RecvSession) AcceptFile(fileId string, fileMeta models.FileMeta) err
 }
 
 func (sess *RecvSession) Start() {
-	sess.started = true
+	sess.started.Store(true)
 }
 
-func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string, fileData []byte) error {
+func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string, fileData io.Reader) error {
 	if sess.id == "" || fileId == "" || token == "" {
 		return lserrors.ErrInvalidBody
 	}
 
 	// if a session is not started, it means the session is invalid
-	if !sess.started {
+	if !sess.started.Load() {
 		return lserrors.ErrRejected
 	}
 
@@ -83,19 +84,24 @@ func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string,
 		return lserrors.ErrRejected
 	}
 
-	// write the file data to disk
+	// write the file data to disk while calculating checksum simultaneously
 	saveAs := filepath.Join(saveToDir, expectedMeta.Filename)
-	err := os.WriteFile(saveAs, fileData, 0o640)
+	hasher := sha256.New()
+	file, err := os.Create(saveAs)
+	if err != nil {
+		return lserrors.ErrFileIO
+	}
+	defer file.Close()
+
+	writer := io.MultiWriter(file, hasher)
+	_, err = io.Copy(writer, fileData)
 	if err != nil {
 		return lserrors.ErrFileIO
 	}
 
 	// calculate checksum if it's provided
 	if expectedMeta.Checksum != "" {
-		checksum, err := utils.SHA256ofFile(saveAs)
-		if err != nil {
-			return lserrors.ErrChecksum
-		}
+		checksum := hex.EncodeToString(hasher.Sum(nil))
 
 		if checksum != expectedMeta.Checksum {
 			return lserrors.ErrChecksum
@@ -131,8 +137,8 @@ func (sess *RecvSession) GetFileMeta(fileId string) (models.FileMeta, bool) {
 }
 
 func (sess *RecvSession) End() {
-	if sess.started { // make sure it ends once
-		sess.started = false
+	if sess.started.Load() { // make sure it ends once
+		sess.started.Store(false)
 		atomic.StoreInt64(&sess.filesCount, 0)
 
 		slog.Info("Session done", "session", sess.id)
@@ -142,5 +148,5 @@ func (sess *RecvSession) End() {
 func (sess *RecvSession) Stopped() bool {
 	fileLefts := atomic.LoadInt64(&sess.filesCount)
 
-	return (!sess.started) || (fileLefts == 0)
+	return (!sess.started.Load()) || (fileLefts == 0)
 }

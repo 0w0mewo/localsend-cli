@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"sync/atomic"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	"github.com/0w0mewo/localsend-cli/internal/models"
@@ -18,7 +19,7 @@ type ForwardSender struct {
 	baseSender
 	remote *models.DeviceInfo
 	https  bool
-	abort  bool
+	abort  atomic.Bool
 }
 
 func NewForwardSender() *ForwardSender {
@@ -31,7 +32,7 @@ func NewForwardSender() *ForwardSender {
 }
 
 func (fsp *ForwardSender) Init(target *models.DeviceInfo, https bool) error {
-	fsp.abort = false
+	fsp.abort.Store(false)
 	fsp.session = ""
 	fsp.remote = target
 	fsp.https = https
@@ -99,7 +100,7 @@ func (fsp *ForwardSender) preUploadReq() error {
 }
 
 func (fsp *ForwardSender) sendFile(fid string, ftoken string) error {
-	if fsp.abort {
+	if fsp.abort.Load() {
 		return nil
 	}
 
@@ -159,7 +160,7 @@ func (fsp *ForwardSender) Start() error {
 func (fsp *ForwardSender) Cancel() error {
 	agent := fiber.AcquireAgent().InsecureSkipVerify()
 	defer func() {
-		fsp.abort = true
+		fsp.abort.Store(true)
 		fiber.ReleaseAgent(agent)
 	}()
 

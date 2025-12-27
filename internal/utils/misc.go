@@ -54,7 +54,7 @@ func GetMyIPv4Addr() ([]net.IP, error) {
 		return nil, err
 	}
 
-	res := make([]net.IP, 0)
+	res := make([]net.IP, 0, len(intfs))
 
 	for _, intf := range intfs {
 		addrs, _ := intf.Addrs()
@@ -69,7 +69,7 @@ func GetMyIPv4Addr() ([]net.IP, error) {
 }
 
 func RandChoice[T any](l []T) T {
-	randIndex := rand.Intn(len(l) - 1)
+	randIndex := rand.Intn(len(l))
 
 	return l[randIndex]
 }

@@ -13,7 +13,7 @@ local _ = require("gettext")
 local T = ffiutil.template
 local json = require("json")
 
-local PLUGIN_VERSION = "v1.0.3"
+local PLUGIN_VERSION = "v1.0.4"
 local GITHUB_RELEASE_URL = "https://api.github.com/repos/kaikozlov/localsend.koplugin/releases/latest"
 
 local data_dir = DataStorage:getFullDataDir()

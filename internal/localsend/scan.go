@@ -26,6 +26,8 @@ type Discoverier struct {
 	discoveried map[string]models.Announcement
 	mu          *sync.RWMutex
 	stop        chan struct{}
+	cachedIPs   []net.IP
+	ipCacheTime time.Time
 }
 
 func NewDiscoverier(devInfo models.DeviceInfo, supportHttps bool) (*Discoverier, error) {
@@ -38,6 +40,8 @@ func NewDiscoverier(devInfo models.DeviceInfo, supportHttps bool) (*Discoverier,
 	if supportHttps {
 		protocol = "https"
 	}
+
+	conn.SetReadBuffer(512)
 
 	return &Discoverier{
 		mcastConn: conn,
@@ -99,8 +103,19 @@ func (ma *Discoverier) Shutdown() error {
 	return nil
 }
 
+func (mcs *Discoverier) getCachedIPs() ([]net.IP, error) {
+	if time.Since(mcs.ipCacheTime) > 30*time.Second || mcs.cachedIPs == nil {
+		ips, err := utils.GetMyIPv4Addr()
+		if err != nil {
+			return nil, err
+		}
+		mcs.cachedIPs = ips
+		mcs.ipCacheTime = time.Now()
+	}
+	return mcs.cachedIPs, nil
+}
+
 func (mcs *Discoverier) readAndRegister() error {
-	mcs.mcastConn.SetReadBuffer(512)
 	mcs.mcastConn.SetReadDeadline(time.Now().Add(1 * time.Second))
 
 	buf := make([]byte, 512)
@@ -116,7 +131,7 @@ func (mcs *Discoverier) readAndRegister() error {
 		return err
 	}
 
-	myIPAddrs, err := utils.GetMyIPv4Addr()
+	myIPAddrs, err := mcs.getCachedIPs()
 	if err != nil {
 		return err
 	}
@@ -135,7 +150,11 @@ func (mcs *Discoverier) GetAllDiscovered() map[string]models.Announcement {
 	mcs.mu.RLock()
 	defer mcs.mu.RUnlock()
 
-	return mcs.discoveried
+	result := make(map[string]models.Announcement, len(mcs.discoveried))
+	for k, v := range mcs.discoveried {
+		result[k] = v
+	}
+	return result
 }
 
 func (mcs *Discoverier) PutDiscovered(ip string, anno models.Announcement) {

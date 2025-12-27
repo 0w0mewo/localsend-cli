@@ -67,7 +67,7 @@ func (rsm *RecvSessManager) NewSession(reqFiles models.FileMetas) (string, error
 	for fileId, fileMeta := range reqFiles {
 		err = session.AcceptFile(fileId, fileMeta)
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 	}
 
@@ -80,19 +80,19 @@ func (rsm *RecvSessManager) NewSession(reqFiles models.FileMetas) (string, error
 
 func (rsm *RecvSessManager) KillSession(sessionId string) {
 	v, exist := rsm.sessions.LoadAndDelete(sessionId)
-	sess := v.(*RecvSession)
-	if sess == nil || !exist {
+	if !exist {
 		return
 	}
+	sess := v.(*RecvSession)
 	sess.End()
 }
 
 func (rsm *RecvSessManager) GetSession(sessionId string) (*RecvSession, error) {
 	v, exist := rsm.sessions.Load(sessionId)
-	session := v.(*RecvSession)
-	if session == nil || !exist {
+	if !exist {
 		return nil, constants.ErrNotFound
 	}
+	session := v.(*RecvSession)
 
 	return session, nil
 }
