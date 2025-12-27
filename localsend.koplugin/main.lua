@@ -516,7 +516,7 @@ function LocalSend:showPinDialog(touchmenu_instance)
     self.pin_dialog:onShowKeyboard()
 end
 
-function LocalSend:showCustomExtDialog(touchmenu_instance)
+function LocalSend:showCustomExtDialog()
     self.accept_ext_dialog = InputDialog:new{
         title = _("Custom extensions"),
         description = _("Comma-separated list (e.g., 'epub,pdf,mobi')"),
@@ -538,7 +538,6 @@ function LocalSend:showCustomExtDialog(touchmenu_instance)
                         self.accept_ext = self.accept_ext_dialog:getInputText()
                         G_reader_settings:saveSetting("LocalSend_accept_ext", self.accept_ext)
                         UIManager:close(self.accept_ext_dialog)
-                        touchmenu_instance:updateItems()
                     end,
                 },
             },
@@ -548,7 +547,7 @@ function LocalSend:showCustomExtDialog(touchmenu_instance)
     self.accept_ext_dialog:onShowKeyboard()
 end
 
-function LocalSend:buildExtensionPresetsMenu(touchmenu_instance)
+function LocalSend:buildExtensionPresetsMenu()
     local menu = {}
     for _, preset in ipairs(EXTENSION_PRESETS) do
         if preset.value == nil then
@@ -557,7 +556,7 @@ function LocalSend:buildExtensionPresetsMenu(touchmenu_instance)
                 text = preset.name,
                 keep_menu_open = true,
                 callback = function()
-                    self:showCustomExtDialog(touchmenu_instance)
+                    self:showCustomExtDialog()
                 end,
             })
         else
@@ -569,7 +568,6 @@ function LocalSend:buildExtensionPresetsMenu(touchmenu_instance)
                 callback = function()
                     self.accept_ext = preset.value
                     G_reader_settings:saveSetting("LocalSend_accept_ext", self.accept_ext)
-                    touchmenu_instance:updateItems()
                 end,
             })
         end
@@ -705,7 +703,7 @@ function LocalSend:addToMainMenu(menu_items)
                 end,
                 enabled_func = function() return not self:isRunning() end,
                 sub_item_table_func = function()
-                    return self:buildExtensionPresetsMenu(menu_items)
+                    return self:buildExtensionPresetsMenu()
                 end,
             },
             {
