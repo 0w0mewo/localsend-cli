@@ -62,17 +62,22 @@ The KOReader frontend provides the user interface, settings management, and inte
 The backend CLI is written in Go. To build for ARM devices:
 
 ```bash
+# Full build (compile Go + package into release zips)
+./arm_build.sh
+
+# Package only (skip Go compilation, reuse existing binaries)
+# Useful when you've only changed Lua code
+./arm_build.sh --package
+```
+
+Or build manually:
+
+```bash
 # armv7 (32-bit)
 GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -ldflags="-s -w" -o localsend-armv7
 
 # arm64 (64-bit)
 GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o localsend-arm64
-```
-
-Or use the build script which builds both and creates release zips:
-
-```bash
-./arm_build.sh
 ```
 
 ### Compatibility

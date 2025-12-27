@@ -13,6 +13,9 @@ local _ = require("gettext")
 local T = ffiutil.template
 local json = require("json")
 
+local PLUGIN_VERSION = "v1.0.3"
+local GITHUB_RELEASE_URL = "https://api.github.com/repos/kaikozlov/localsend.koplugin/releases/latest"
+
 local data_dir = DataStorage:getFullDataDir()
 local plugin_path = data_dir .. "/plugins/localsend.koplugin"
 local binary_path = plugin_path .. "/localsend"
@@ -652,6 +655,95 @@ function LocalSend:rotateCertificates()
     })
 end
 
+function LocalSend:compareVersions(v1, v2)
+    -- Compare semantic versions, returns:
+    -- -1 if v1 < v2, 0 if equal, 1 if v1 > v2
+    local function parseVersion(v)
+        local parts = {}
+        for num in string.gmatch(v:gsub("^v", ""), "(%d+)") do
+            table.insert(parts, tonumber(num) or 0)
+        end
+        return parts
+    end
+
+    local p1, p2 = parseVersion(v1), parseVersion(v2)
+    for i = 1, math.max(#p1, #p2) do
+        local n1, n2 = p1[i] or 0, p2[i] or 0
+        if n1 < n2 then return -1 end
+        if n1 > n2 then return 1 end
+    end
+    return 0
+end
+
+function LocalSend:checkForUpdates()
+    UIManager:show(InfoMessage:new{
+        text = _("Checking for updates..."),
+        timeout = 2,
+    })
+
+    -- Use curl to fetch the latest release info
+    local tmp_file = "/tmp/localsend_update_check.json"
+    local cmd = string.format(
+        "curl -s -o '%s' -w '%%{http_code}' --connect-timeout 10 -H 'Accept: application/vnd.github.v3+json' '%s'",
+        tmp_file, GITHUB_RELEASE_URL)
+
+    local handle = io.popen(cmd)
+    local http_code = handle:read("*a")
+    handle:close()
+
+    if http_code ~= "200" then
+        UIManager:show(InfoMessage:new{
+            icon = "notice-warning",
+            text = T(_("Failed to check for updates.\nHTTP status: %1\n\nPlease check your internet connection."), http_code),
+        })
+        os.remove(tmp_file)
+        return
+    end
+
+    local f = io.open(tmp_file, "r")
+    if not f then
+        UIManager:show(InfoMessage:new{
+            icon = "notice-warning",
+            text = _("Failed to read update information."),
+        })
+        return
+    end
+
+    local content = f:read("*a")
+    f:close()
+    os.remove(tmp_file)
+
+    local ok, release = pcall(json.decode, content)
+    if not ok or not release or not release.tag_name then
+        UIManager:show(InfoMessage:new{
+            icon = "notice-warning",
+            text = _("Failed to parse update information."),
+        })
+        return
+    end
+
+    local latest_version = release.tag_name:gsub("^v", "")
+    local current_version = PLUGIN_VERSION:gsub("^v", "")
+
+    if self:compareVersions(current_version, latest_version) >= 0 then
+        UIManager:show(InfoMessage:new{
+            text = T(_("You're up to date!\n\nCurrent version: %1\nLatest version: %2"), PLUGIN_VERSION, release.tag_name),
+            timeout = 5,
+        })
+    else
+        local release_notes = release.body or _("No release notes available.")
+        -- Truncate if too long
+        if #release_notes > 500 then
+            release_notes = release_notes:sub(1, 500) .. "..."
+        end
+
+        UIManager:show(InfoMessage:new{
+            text = T(_("Update available!\n\nCurrent: %1\nLatest: %2\n\nRelease notes:\n%3\n\nVisit GitHub to download the update."),
+                PLUGIN_VERSION, release.tag_name, release_notes),
+        })
+    end
+end
+
 function LocalSend:addToMainMenu(menu_items)
     menu_items.localsend = {
         text_func = function()
@@ -682,37 +774,16 @@ function LocalSend:addToMainMenu(menu_items)
                 end,
             },
             {
-                text = _("Restart server"),
-                keep_menu_open = true,
-                enabled_func = function() return self:isRunning() end,
-                callback = function(touchmenu_instance)
-                    self:restart()
-                    ffiutil.sleep(1)
-                    touchmenu_instance:updateItems()
+                text_func = function()
+                    local count = self:getTransferCount()
+                    if count > 0 then
+                        return T(_("Recent transfers (%1)"), count)
+                    end
+                    return _("Recent transfers")
                 end,
-            },
-            {
-                text = _("Recent transfers"),
                 enabled_func = function() return self:getTransferCount() > 0 end,
                 callback = function()
                     self:showRecentTransfers()
-                end,
-            },
-            {
-                text = "---",
-            },
-            {
-                text_func = function()
-                    if self.device_name ~= "" then
-                        return T(_("Device name (%1)"), self.device_name)
-                    else
-                        return _("Device name (random)")
-                    end
-                end,
-                keep_menu_open = true,
-                enabled_func = function() return not self:isRunning() end,
-                callback = function(touchmenu_instance)
-                    self:showDeviceNameDialog(touchmenu_instance)
                 end,
             },
             {
@@ -726,59 +797,87 @@ function LocalSend:addToMainMenu(menu_items)
                 end,
             },
             {
-                text_func = function()
-                    if self.accept_ext ~= "" then
-                        return T(_("Allowed extensions (%1)"), self.accept_ext)
-                    else
-                        return _("Allowed extensions (all)")
-                    end
-                end,
+                text = _("Settings"),
                 enabled_func = function() return not self:isRunning() end,
-                sub_item_table_func = function()
-                    return self:buildExtensionPresetsMenu()
-                end,
-            },
-            {
-                text_func = function()
-                    if self.pin ~= "" then
-                        return _("PIN code (enabled)")
-                    else
-                        return _("PIN code (disabled)")
-                    end
-                end,
-                keep_menu_open = true,
-                enabled_func = function() return not self:isRunning() end,
-                callback = function(touchmenu_instance)
-                    self:showPinDialog(touchmenu_instance)
-                end,
+                sub_item_table = {
+                    {
+                        text_func = function()
+                            if self.device_name ~= "" then
+                                return T(_("Device name (%1)"), self.device_name)
+                            else
+                                return _("Device name (random)")
+                            end
+                        end,
+                        keep_menu_open = true,
+                        callback = function(touchmenu_instance)
+                            self:showDeviceNameDialog(touchmenu_instance)
+                        end,
+                    },
+                    {
+                        text_func = function()
+                            if self.accept_ext ~= "" then
+                                return T(_("Allowed extensions (%1)"), self.accept_ext)
+                            else
+                                return _("Allowed extensions (all)")
+                            end
+                        end,
+                        sub_item_table_func = function()
+                            return self:buildExtensionPresetsMenu()
+                        end,
+                    },
+                    {
+                        text_func = function()
+                            if self.pin ~= "" then
+                                return _("PIN code (enabled)")
+                            else
+                                return _("PIN code (disabled)")
+                            end
+                        end,
+                        keep_menu_open = true,
+                        callback = function(touchmenu_instance)
+                            self:showPinDialog(touchmenu_instance)
+                        end,
+                    },
+                    {
+                        text = "---",
+                    },
+                    {
+                        text = _("Use HTTPS"),
+                        checked_func = function() return self.use_https end,
+                        callback = function()
+                            self.use_https = not self.use_https
+                            G_reader_settings:flipNilOrTrue("LocalSend_use_https")
+                        end,
+                    },
+                    {
+                        text = _("Start with KOReader"),
+                        checked_func = function() return self.autostart end,
+                        callback = function()
+                            self.autostart = not self.autostart
+                            G_reader_settings:flipNilOrFalse("LocalSend_autostart")
+                        end,
+                    },
+                    {
+                        text = _("Rotate certificates"),
+                        keep_menu_open = true,
+                        callback = function()
+                            self:rotateCertificates()
+                        end,
+                    },
+                },
             },
             {
                 text = "---",
             },
             {
-                text = _("Use HTTPS"),
-                checked_func = function() return self.use_https end,
-                enabled_func = function() return not self:isRunning() end,
-                callback = function()
-                    self.use_https = not self.use_https
-                    G_reader_settings:flipNilOrTrue("LocalSend_use_https")
+                text_func = function()
+                    return T(_("Version: %1"), PLUGIN_VERSION)
                 end,
-            },
-            {
-                text = _("Start with KOReader"),
-                checked_func = function() return self.autostart end,
-                callback = function()
-                    self.autostart = not self.autostart
-                    G_reader_settings:flipNilOrFalse("LocalSend_autostart")
-                end,
-            },
-            {
-                text = _("Rotate certificates"),
                 keep_menu_open = true,
-                enabled_func = function() return not self:isRunning() end,
                 callback = function()
-                    self:rotateCertificates()
+                    self:checkForUpdates()
                 end,
+                help_text = _("Tap to check for updates"),
             },
         }
     }
