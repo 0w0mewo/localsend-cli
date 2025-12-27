@@ -38,14 +38,14 @@ A KOReader plugin that enables receiving files from other devices using the [Loc
 
 ### Settings
 
-| Setting | Description |
-|---------|-------------|
-| Save directory | Destination folder for received files |
-| Device name | Display name on the network (e.g., "My Kindle") |
-| Allowed extensions | Comma-separated list of accepted file types |
-| PIN code | Required PIN for incoming transfers (optional) |
-| Use HTTPS | Enable TLS encryption (recommended) |
-| Start with KOReader | Auto-start server on launch |
+| Setting             | Description                                     |
+| ------------------- | ----------------------------------------------- |
+| Save directory      | Destination folder for received files           |
+| Device name         | Display name on the network (e.g., "My Kindle") |
+| Allowed extensions  | Comma-separated list of accepted file types     |
+| PIN code            | Required PIN for incoming transfers (optional)  |
+| Use HTTPS           | Enable TLS encryption (recommended)             |
+| Start with KOReader | Auto-start server on launch                     |
 
 ### How It Works
 
@@ -81,14 +81,23 @@ Tested on Kindle Paperwhite 12 (armv7). Should work on other devices supported b
 
 ### Which architecture do I need?
 
-| Architecture | Devices |
-|--------------|---------|
-| **armv7** | Kindle (firmware ≥5.16.3), Kobo Clara HD/Libra H2O/Sage/Elipsa, reMarkable 2, PocketBook |
-| **arm64** | Kobo Clara Colour/BW (2024+), Kobo Libra Colour, reMarkable Paper Pro |
+| Architecture | Devices                                                                |
+| ------------ | ---------------------------------------------------------------------- |
+| **armv7**    | Kindle (firmware ≥5.16.3), Kobo (all models), reMarkable 2, PocketBook |
+| **arm64**    | reMarkable Paper Pro                                                   |
 
 > **Kindle users:** This plugin requires firmware 5.16.3 or newer (the same requirement as KOReader's `kindlehf` package). Older firmware uses a different floating-point ABI that isn't supported.
 
 **Not sure?** Try armv7 first.
+
+_Reported_ to work on:
+
+armv7 devices:
+
+- Kindle Paperwhite 12th Gen (PW6)
+- Kindle Paperwhite 10th Gen (PW4)
+- Kindle Oasis
+- Kobo Clara Colour
 
 ### License
 
