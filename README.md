@@ -2,6 +2,8 @@
 
 A KOReader plugin that enables receiving files from other devices using the [LocalSend](https://localsend.org/) protocol. Send ebooks, documents, and other files directly to your e-reader from any device running LocalSend.
 
+**[Download latest release](https://github.com/kaikozlov/localsend.koplugin/releases/latest)**
+
 ### Features
 
 - **Receive files wirelessly** - Accept files from phones, tablets, and computers running LocalSend
