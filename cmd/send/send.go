@@ -38,7 +38,7 @@ var Cmd = &cobra.Command{
 		// only request remote device info when download api is unused
 		var devinfo models.DeviceInfo
 		if !useDownloadAPI {
-			devinfo, err = localsend.GetDeviceInfo(ip)
+			devinfo, err = localsend.GetDeviceInfo(ip, supportHttps)
 			if err != nil {
 				slog.Error("Fail to get device info", "error", err)
 				return nil
