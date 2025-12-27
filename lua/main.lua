@@ -789,10 +789,4 @@ function LocalSend:onDispatcherRegisterActions()
         { category = "none", event = "ToggleLocalSend", title = _("Toggle LocalSend server"), general = true })
 end
 
-function LocalSend:onCloseWidget()
-    if self:isRunning() then
-        self:stopServer(true)
-    end
-end
-
 return LocalSend
