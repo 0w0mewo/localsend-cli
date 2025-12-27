@@ -14,7 +14,9 @@ A KOReader plugin that enables receiving files from other devices using the [Loc
 
 ### Installation
 
-1. Download the latest release
+1. Download the latest release for your device's architecture:
+   - **armv7** - 32-bit ARM (e.g., Kindle Paperwhite 12)
+   - **arm64** - 64-bit ARM
 2. Extract `localsend.koplugin` to your KOReader plugins directory:
    - Kindle: `/mnt/us/koreader/plugins/`
    - Kobo: `/.adds/koreader/plugins/`
@@ -58,12 +60,22 @@ The KOReader frontend provides the user interface, settings management, and inte
 The backend CLI is written in Go. To build for ARM devices:
 
 ```bash
-GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -ldflags="-s -w" -o localsend-armhf
+# armv7 (32-bit)
+GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -ldflags="-s -w" -o localsend-armv7
+
+# arm64 (64-bit)
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o localsend-arm64
+```
+
+Or use the build script which builds both and creates release zips:
+
+```bash
+./arm_build.sh
 ```
 
 ### Compatibility
 
-- **Kindle Paperwhite 12** - This has only been tested on my Kindle Paperwhite 12th generation. It should work on other devices supported by KOReader, but performance may vary. - The main sticking point should be building the localsend binary for the correct architure.
+Tested on Kindle Paperwhite 12 (armv7). Should work on other devices supported by KOReader - just download the correct architecture (armv7 or arm64) for your device.
 
 ### License
 

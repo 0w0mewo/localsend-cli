@@ -15,7 +15,7 @@ local json = require("json")
 
 local data_dir = DataStorage:getFullDataDir()
 local plugin_path = data_dir .. "/plugins/localsend.koplugin"
-local binary_path = plugin_path .. "/localsend-armhf"
+local binary_path = plugin_path .. "/localsend"
 local cert_storage_path = plugin_path .. "/certs"
 local pid_file = "/tmp/localsend_koreader.pid"
 local transfer_log_file = "/tmp/localsend_transfers.log"
