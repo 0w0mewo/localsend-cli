@@ -9,6 +9,7 @@ web/dist
 
 # build folder
 build
+*.zip
 
 # testdat
 testdata
