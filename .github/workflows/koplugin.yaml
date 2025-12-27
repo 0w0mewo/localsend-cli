@@ -1,0 +1,73 @@
+name: Build KOReader Plugin
+
+on:
+  release:
+    types:
+      - created
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build KOReader Plugin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache: true
+
+      - name: Install UPX
+        run: sudo apt-get update && sudo apt-get install -y upx
+
+      - name: Build ARM binaries
+        run: |
+          BUILD_DIR="build"
+          BIN_DIR="$BUILD_DIR/bin"
+          PLUGIN_NAME="localsend.koplugin"
+          PLUGIN_SRC="lua"
+
+          mkdir -p "$BIN_DIR"
+          mkdir -p "$BUILD_DIR/$PLUGIN_NAME"
+
+          # Copy plugin source files
+          cp "$PLUGIN_SRC/main.lua" "$BUILD_DIR/$PLUGIN_NAME/"
+          cp "$PLUGIN_SRC/_meta.lua" "$BUILD_DIR/$PLUGIN_NAME/"
+
+          # Build for armv7 (32-bit ARM)
+          echo "Building for armv7..."
+          GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BIN_DIR/localsend-armv7" .
+          echo "Compressing armv7 with UPX..."
+          upx --best "$BIN_DIR/localsend-armv7"
+
+          # Build for arm64 (64-bit ARM)
+          echo "Building for arm64..."
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o "$BIN_DIR/localsend-arm64" .
+          echo "Compressing arm64 with UPX..."
+          upx --best "$BIN_DIR/localsend-arm64"
+
+          # Create armv7 zip
+          echo "Creating armv7 zip..."
+          cp "$BIN_DIR/localsend-armv7" "$BUILD_DIR/$PLUGIN_NAME/localsend"
+          (cd "$BUILD_DIR" && zip -r "localsend-koplugin-armv7.zip" "$PLUGIN_NAME")
+
+          # Create arm64 zip
+          echo "Creating arm64 zip..."
+          cp "$BIN_DIR/localsend-arm64" "$BUILD_DIR/$PLUGIN_NAME/localsend"
+          (cd "$BUILD_DIR" && zip -r "localsend-koplugin-arm64.zip" "$PLUGIN_NAME")
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: koplugin-packages
+          path: build/*.zip
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/*.zip
