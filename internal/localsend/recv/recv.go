@@ -42,7 +42,7 @@ type TransferLogEntry struct {
 
 func NewFileReceiver(devname string, saveToDir string, supportHttps bool) *FileReceiver {
 	return &FileReceiver{
-		identity:          models.NewDeviceInfo(devname, ""),
+		identity:          models.NewDeviceInfo(devname, lsutils.GenFingerprint()),
 		webServer:         lsutils.NewWebServer(),
 		supportHttps:      supportHttps,
 		saveToDir:         saveToDir,

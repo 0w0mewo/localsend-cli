@@ -44,7 +44,7 @@ var Cmd = &cobra.Command{
 				return nil
 			}
 		} else {
-			devinfo = models.NewDeviceInfo(lsutils.GenAlias(), "")
+			devinfo = models.NewDeviceInfo(lsutils.GenAlias(), lsutils.GenFingerprint())
 		}
 
 		sender := localsend.NewFileSender(useDownloadAPI)

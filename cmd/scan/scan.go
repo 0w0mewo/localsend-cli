@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,7 +14,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var timeout int64
+var (
+	timeout int64
+	legacy  bool
+)
 
 var Cmd = &cobra.Command{
 	Use:   "scan",
@@ -23,12 +27,15 @@ var Cmd = &cobra.Command{
 		slog.Info("Start Scanning")
 
 		scanner, err := localsend.NewDiscoverier(
-			models.NewDeviceInfo(utils.GenAlias(), ""),
+			models.NewDeviceInfo(utils.GenAlias(), utils.GenFingerprint()),
 			false)
 		if err != nil {
 			slog.Error("Fail to create advertiser", "error", err)
 			return
 		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(timeout))
+		defer cancel()
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -37,7 +44,16 @@ var Cmd = &cobra.Command{
 			scanner.Listen()
 		}()
 
-		<-time.After(time.Second * time.Duration(timeout))
+		if legacy {
+			slog.Info("Performing legacy HTTP subnet scan")
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				scanner.ScanSubnet(ctx)
+			}()
+		}
+
+		<-ctx.Done()
 		slog.Info("Stop Scanning")
 		scanner.Shutdown()
 		wg.Wait()
@@ -58,4 +74,5 @@ var Cmd = &cobra.Command{
 
 func init() {
 	Cmd.PersistentFlags().Int64VarP(&timeout, "timeout", "t", 4, "scan duration in seconds")
+	Cmd.PersistentFlags().BoolVarP(&legacy, "legacy", "l", false, "perform legacy HTTP subnet scan")
 }

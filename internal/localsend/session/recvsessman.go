@@ -56,9 +56,9 @@ func (rsm *RecvSessManager) GeneratePreUploadResp(sessionId string) (models.PreU
 	return resp, nil
 }
 
-func (rsm *RecvSessManager) NewSession(reqFiles models.FileMetas) (string, error) {
+func (rsm *RecvSessManager) NewSession(reqFiles models.FileMetas, clientIP string) (string, error) {
 	sessionId := uuid.NewString()
-	session, err := NewRecvSession(sessionId)
+	session, err := NewRecvSession(sessionId, clientIP)
 	if err != nil {
 		return "", err
 	}
@@ -95,4 +95,19 @@ func (rsm *RecvSessManager) GetSession(sessionId string) (*RecvSession, error) {
 	session := v.(*RecvSession)
 
 	return session, nil
+}
+
+// HasActiveSessions returns true if there are any active (non-stopped) sessions
+// per protocol spec Section 4.1: return 409 when "Blocked by another session"
+func (rsm *RecvSessManager) HasActiveSessions() bool {
+	hasActive := false
+	rsm.sessions.Range(func(key, value any) bool {
+		session := value.(*RecvSession)
+		if !session.Stopped() {
+			hasActive = true
+			return false // stop iteration
+		}
+		return true
+	})
+	return hasActive
 }

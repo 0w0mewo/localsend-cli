@@ -4,18 +4,27 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/google/uuid"
 )
 
+// FileMetadata contains optional file timestamp information
+type FileMetadata struct {
+	Modified string `json:"modified,omitempty"`
+	Accessed string `json:"accessed,omitempty"`
+}
+
 type FileMeta struct {
-	Id       string `json:"id"`
-	Filename string `json:"fileName"`
-	Size     int64  `json:"size"`
-	FileMIME string `json:"fileType"`
-	Checksum string `json:"sha256"`
-	FullPath string `json:"-"`
+	Id       string        `json:"id"`
+	Filename string        `json:"fileName"`
+	Size     int64         `json:"size"`
+	FileMIME string        `json:"fileType"`
+	Checksum string        `json:"sha256,omitempty"`
+	Preview  string        `json:"preview,omitempty"`
+	Metadata *FileMetadata `json:"metadata,omitempty"`
+	FullPath string        `json:"-"`
 }
 
 func GenFileMeta(fpath string) (FileMeta, error) {
@@ -40,6 +49,9 @@ func GenFileMeta(fpath string) (FileMeta, error) {
 		Size:     fd.Size(),
 		FileMIME: fileType,
 		Checksum: checksum,
+		Metadata: &FileMetadata{
+			Modified: fd.ModTime().Format(time.RFC3339),
+		},
 		FullPath: fpath,
 	}, nil
 }

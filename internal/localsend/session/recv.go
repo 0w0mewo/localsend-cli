@@ -24,14 +24,16 @@ type RecvSession struct {
 	fileTokens models.FileTokens
 	mu         sync.RWMutex
 	id         string
+	clientIP   string // IP address of the client that initiated the session (per protocol spec Section 4.2)
 	started    atomic.Bool
 }
 
-func NewRecvSession(sessionId string) (*RecvSession, error) {
+func NewRecvSession(sessionId string, clientIP string) (*RecvSession, error) {
 	sess := &RecvSession{
 		fileMetas:  make(models.FileMetas),
 		fileTokens: make(models.FileTokens),
 		id:         sessionId,
+		clientIP:   clientIP,
 	}
 
 	return sess, nil
@@ -90,13 +92,19 @@ func findUniquePath(dir, filename string) string {
 	}
 }
 
-func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string, fileData io.Reader) error {
+func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string, clientIP string, fileData io.Reader) error {
 	if sess.id == "" || fileId == "" || token == "" {
 		return lserrors.ErrInvalidBody
 	}
 
 	// if a session is not started, it means the session is invalid
 	if !sess.started.Load() {
+		return lserrors.ErrRejected
+	}
+
+	// Validate client IP per protocol spec Section 4.2:
+	// Return 403 for "Invalid token or IP address"
+	if sess.clientIP != "" && clientIP != sess.clientIP {
 		return lserrors.ErrRejected
 	}
 

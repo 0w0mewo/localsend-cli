@@ -16,6 +16,7 @@ import (
 	"github.com/0w0mewo/localsend-cli/templates"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html/v2"
+	"github.com/google/uuid"
 )
 
 var aliasAdj = []string{
@@ -152,6 +153,12 @@ func GenAlias() string {
 	fruit := utils.RandChoice(aliasFruit)
 
 	return adj + " " + fruit
+}
+
+// GenFingerprint generates a random fingerprint for HTTP mode.
+// In HTTPS mode, the fingerprint is derived from the TLS certificate instead.
+func GenFingerprint() string {
+	return uuid.NewString()
 }
 
 func NewWebServer(withTemplateEngine ...bool) *fiber.App {

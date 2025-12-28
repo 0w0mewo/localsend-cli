@@ -40,7 +40,7 @@ func (fsp *ForwardSender) Init(target *models.DeviceInfo, https bool) error {
 	fsp.https = https
 
 	// Create local device identity for sender
-	localInfo := models.NewDeviceInfo(lsutils.GenAlias(), "")
+	localInfo := models.NewDeviceInfo(lsutils.GenAlias(), lsutils.GenFingerprint())
 	fsp.local = &localInfo
 
 	fsp.reset()
@@ -64,8 +64,17 @@ func (fsp *ForwardSender) preUploadReq() error {
 		}
 	}
 
+	// Build request with SenderInfo per protocol spec Section 4.1
+	protocol := "http"
+	if fsp.https {
+		protocol = "https"
+	}
 	var meta models.PreUploadReq
-	meta.Info = fsp.local
+	meta.Info = &models.SenderInfo{
+		DeviceInfo: *fsp.local,
+		Port:       53317,
+		Protocol:   protocol,
+	}
 	meta.Files = fsp.files
 
 	// setup request

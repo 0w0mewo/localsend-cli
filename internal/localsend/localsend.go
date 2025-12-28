@@ -10,6 +10,24 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// validDeviceTypes are the allowed deviceType values per protocol spec Section 7.1
+var validDeviceTypes = map[string]bool{
+	"mobile":   true,
+	"desktop":  true,
+	"web":      true,
+	"headless": true,
+	"server":   true,
+}
+
+// normalizeDeviceType validates deviceType and falls back to "desktop" for unknown values
+// per protocol spec: "The official implementation falls back to desktop"
+func normalizeDeviceType(deviceType string) string {
+	if validDeviceTypes[deviceType] {
+		return deviceType
+	}
+	return "desktop"
+}
+
 func GetDeviceInfo(ip string, https bool) (models.DeviceInfo, error) {
 	remoteAddr := net.JoinHostPort(ip, "53317")
 
@@ -46,6 +64,7 @@ func GetDeviceInfo(ip string, https bool) (models.DeviceInfo, error) {
 		return models.DeviceInfo{}, err
 	}
 	res.IP = ip
+	res.DeviceType = normalizeDeviceType(res.DeviceType)
 
 	return res, nil
 }

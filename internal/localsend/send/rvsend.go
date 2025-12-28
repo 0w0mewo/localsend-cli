@@ -47,6 +47,9 @@ func (rs *ReverseSender) Init(target *models.DeviceInfo, https bool) error {
 	rs.session = uuid.NewString()
 	rs.https = https
 
+	// The reverse sender IS the download API, so set Download to true
+	rs.local.Download = true
+
 	if https {
 		privkeyFile := filepath.Join(os.TempDir(), "server.key.pem")
 		certFile := filepath.Join(os.TempDir(), "server.crt")
@@ -64,11 +67,18 @@ func (rs *ReverseSender) Init(target *models.DeviceInfo, https bool) error {
 }
 
 func (rs *ReverseSender) predownloadHandler(c *fiber.Ctx) error {
+	// Check PIN if set
 	if rs.pin != "" {
 		pin := c.Query("pin")
 		if pin != rs.pin {
 			return c.SendStatus(401)
 		}
+	}
+
+	// Support session refresh - if sessionId provided, validate it matches
+	sessionId := c.Query("sessionId")
+	if sessionId != "" && sessionId != rs.session {
+		return c.SendStatus(403)
 	}
 
 	var resp models.PreDownloadResp
@@ -96,15 +106,17 @@ func (rs *ReverseSender) downloadHandler(c *fiber.Ctx) error {
 		return c.SendStatus(404)
 	}
 
+	// Set Content-Disposition header BEFORE sending file
+	c.Set(fiber.HeaderContentDisposition, fmt.Sprintf(`attachment; filename="%s"`, fileMeta.Filename))
+
 	err := c.SendFile(fileMeta.FullPath)
 	if err != nil {
 		slog.Info("Fail to send file", "file", fileMeta.Filename)
 		return c.SendStatus(500)
 	}
-	c.Set(fiber.HeaderContentDisposition, fmt.Sprintf(`attachment; filename="%s"`, fileMeta.Filename))
 
 	slog.Info("File sent", "file", fileMeta.Filename, "recv", c.IP())
-	return c.SendStatus(200)
+	return nil
 }
 
 func (rs *ReverseSender) Start() error {
