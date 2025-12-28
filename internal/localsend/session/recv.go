@@ -92,20 +92,20 @@ func findUniquePath(dir, filename string) string {
 	}
 }
 
-func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string, clientIP string, fileData io.Reader) error {
+func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string, clientIP string, fileData io.Reader) (string, error) {
 	if sess.id == "" || fileId == "" || token == "" {
-		return lserrors.ErrInvalidBody
+		return "", lserrors.ErrInvalidBody
 	}
 
 	// if a session is not started, it means the session is invalid
 	if !sess.started.Load() {
-		return lserrors.ErrRejected
+		return "", lserrors.ErrRejected
 	}
 
 	// Validate client IP per protocol spec Section 4.2:
 	// Return 403 for "Invalid token or IP address"
 	if sess.clientIP != "" && clientIP != sess.clientIP {
-		return lserrors.ErrRejected
+		return "", lserrors.ErrRejected
 	}
 
 	sess.mu.RLock()
@@ -115,7 +115,7 @@ func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string,
 
 	// validate
 	if !metaExist || !tokenExist || expectedToken != token {
-		return lserrors.ErrRejected
+		return "", lserrors.ErrRejected
 	}
 
 	// write the file data to disk while calculating checksum simultaneously
@@ -123,14 +123,14 @@ func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string,
 	hasher := sha256.New()
 	file, err := os.Create(saveAs)
 	if err != nil {
-		return lserrors.ErrFileIO
+		return "", lserrors.ErrFileIO
 	}
 	defer file.Close()
 
 	writer := io.MultiWriter(file, hasher)
 	_, err = io.Copy(writer, fileData)
 	if err != nil {
-		return lserrors.ErrFileIO
+		return "", lserrors.ErrFileIO
 	}
 
 	// calculate checksum if it's provided
@@ -138,7 +138,7 @@ func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string,
 		checksum := hex.EncodeToString(hasher.Sum(nil))
 
 		if checksum != expectedMeta.Checksum {
-			return lserrors.ErrChecksum
+			return "", lserrors.ErrChecksum
 		}
 	}
 
@@ -152,7 +152,8 @@ func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string,
 		sess.End()
 	}
 
-	return nil
+	// Return the actual saved filename (may differ from original if renamed due to conflict)
+	return filepath.Base(saveAs), nil
 }
 
 func (sess *RecvSession) FileTokens() models.FileTokens {

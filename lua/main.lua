@@ -13,11 +13,12 @@ local _ = require("gettext")
 local T = ffiutil.template
 local json = require("json")
 
-local PLUGIN_VERSION = "v1.0.5"
 local GITHUB_RELEASE_URL = "https://api.github.com/repos/kaikozlov/localsend.koplugin/releases/latest"
 
 local data_dir = DataStorage:getFullDataDir()
 local plugin_path = data_dir .. "/plugins/localsend.koplugin"
+local plugin_meta = dofile(plugin_path .. "/_meta.lua")
+local PLUGIN_VERSION = plugin_meta.version or "unknown"
 local binary_path = plugin_path .. "/localsend"
 local cert_storage_path = plugin_path .. "/certs"
 local pid_file = "/tmp/localsend_koreader.pid"
