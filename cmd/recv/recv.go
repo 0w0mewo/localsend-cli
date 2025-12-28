@@ -5,9 +5,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/0w0mewo/localsend-cli/internal/crypto"
 	lsrecv "github.com/0w0mewo/localsend-cli/internal/localsend/recv"
 	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
+	"github.com/0w0mewo/localsend-cli/internal/webrtc/signaling"
+	"github.com/0w0mewo/localsend-cli/internal/webrtc/transfer"
 	"github.com/spf13/cobra"
 )
 
@@ -18,13 +21,17 @@ var (
 	pin          string
 	acceptExt    string
 	logFile      string
+	webrtcMode   bool
 )
 
 var Cmd = &cobra.Command{
-	Use:    "recv",
+	Use:   "recv",
 	Short: "Receive files from localsend instance",
-	Long:   "Receive files from localsend instance",
+	Long:  "Receive files from localsend instance",
 	Run: func(cmd *cobra.Command, args []string) {
+		var wg sync.WaitGroup
+
+		// HTTP receiver (always start unless webrtc-only)
 		recver := lsrecv.NewFileReceiver(devname, savetodir, supportHttps)
 		recver.SetPIN(pin)
 		recver.SetTransferLog(logFile)
@@ -32,21 +39,18 @@ var Cmd = &cobra.Command{
 		// Set allowed extensions if provided
 		if acceptExt != "" {
 			extensions := strings.Split(acceptExt, ",")
-			// Trim whitespace from each extension
 			for i, ext := range extensions {
 				extensions[i] = strings.TrimSpace(strings.ToLower(ext))
 			}
 			recver.SetAllowedExtensions(extensions)
 		}
-		
+
 		if err := recver.Init(); err != nil {
 			slog.Error("Failed to initialize receiver", "error", err)
 			return
 		}
 
-		var wg sync.WaitGroup
-
-		// start recv server
+		// Start HTTP server
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -57,11 +61,79 @@ var Cmd = &cobra.Command{
 			}
 		}()
 
+		// WebRTC receiver
+		if webrtcMode {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				startWebRTCReceiver(savetodir, pin)
+			}()
+		}
+
 		<-utils.WaitForSignal()
 
 		recver.Stop()
 		wg.Wait()
 	},
+}
+
+func startWebRTCReceiver(saveDir, pin string) {
+	// Generate signing key for token
+	key, err := crypto.GenerateKeyPair()
+	if err != nil {
+		slog.Error("Failed to generate key pair", "error", err)
+		return
+	}
+
+	// Generate token
+	token, err := key.GenerateTokenTimestamp()
+	if err != nil {
+		slog.Error("Failed to generate token", "error", err)
+		return
+	}
+
+	// Connect to signaling server
+	info := signaling.ClientInfoWithoutID{
+		Alias:       lsutils.GenAlias(),
+		Version:     "2.1",
+		DeviceModel: "LocalSend-CLI",
+		DeviceType:  "headless",
+		Token:       token,
+	}
+
+	client, err := signaling.Connect(signaling.DefaultSignalingServer, info)
+	if err != nil {
+		slog.Error("Failed to connect to signaling server", "error", err)
+		return
+	}
+	defer client.Close()
+
+	slog.Info("WebRTC receiver listening", "id", client.ClientID())
+
+	// Create receiver
+	receiver := transfer.NewRTCReceiver(client, key, pin, saveDir)
+	defer receiver.Close()
+
+	// Set up file selection handler (accept all files)
+	receiver.OnSelectFiles(func(files []transfer.RTCFileDto) []string {
+		ids := make([]string, len(files))
+		for i, f := range files {
+			slog.Info("Receiving file via WebRTC", "name", f.FileName, "size", f.Size)
+			ids[i] = f.ID
+		}
+		return ids
+	})
+
+	// Listen for offers
+	receiver.ListenForOffers(func(offer signaling.WsServerMessage) {
+		slog.Info("Received WebRTC offer", "peer", offer.Peer.Alias)
+		if err := receiver.AcceptOffer(offer); err != nil {
+			slog.Error("Failed to accept offer", "error", err)
+		}
+	})
+
+	// Block until signal
+	<-utils.WaitForSignal()
 }
 
 func init() {
@@ -71,4 +143,5 @@ func init() {
 	Cmd.PersistentFlags().BoolVar(&supportHttps, "https", true, "Do https")
 	Cmd.PersistentFlags().StringVarP(&acceptExt, "accept-ext", "a", "", "Comma-separated list of allowed file extensions (e.g., epub,pdf,mobi). Empty means accept all.")
 	Cmd.PersistentFlags().StringVarP(&logFile, "log", "l", "", "Path to transfer log file (JSON lines format)")
+	Cmd.PersistentFlags().BoolVarP(&webrtcMode, "webrtc", "w", false, "Also listen for WebRTC offers via signaling server")
 }
