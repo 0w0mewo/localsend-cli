@@ -92,8 +92,9 @@ func (ma *Discoverier) advertise() error {
 }
 
 func (ma *Discoverier) Shutdown() error {
+	err := ma.mcastConn.Close()
 	ma.stop <- struct{}{}
-	return ma.mcastConn.Close()
+	return err
 }
 
 func (mcs *Discoverier) readAndRegister() error {

@@ -10,14 +10,19 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func GetDeviceInfo(ip string) (models.DeviceInfo, error) {
+func GetDeviceInfo(ip string, https bool) (models.DeviceInfo, error) {
 	remoteAddr := net.JoinHostPort(ip, "53317")
 
 	agent := fiber.AcquireAgent()
 	defer fiber.ReleaseAgent(agent)
 
+	scheme := "http"
+	if https {
+		scheme = "https"
+	}
+
 	req := agent.Request()
-	req.URI().SetScheme("https")
+	req.URI().SetScheme(scheme)
 	req.URI().SetHost(remoteAddr)
 	req.URI().SetPath(constants.InfoPath)
 	req.Header.SetMethod(fiber.MethodGet)

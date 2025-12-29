@@ -16,9 +16,9 @@ import (
 type RecvSession struct {
 	fileMetas  models.FileMetas
 	fileTokens models.FileTokens
-	mu         *sync.RWMutex
+	mu         sync.RWMutex
 	id         string
-	started    bool
+	started    atomic.Bool
 	filesCount int64
 }
 
@@ -26,8 +26,6 @@ func NewRecvSession(sessionId string) (*RecvSession, error) {
 	sess := &RecvSession{
 		fileMetas:  make(models.FileMetas),
 		fileTokens: make(models.FileTokens),
-		mu:         &sync.RWMutex{},
-		started:    false,
 		id:         sessionId,
 	}
 
@@ -36,7 +34,7 @@ func NewRecvSession(sessionId string) (*RecvSession, error) {
 
 func (sess *RecvSession) AcceptFile(fileId string, fileMeta models.FileMeta) error {
 	// reject upload request for a started session
-	if sess.started {
+	if sess.started.Load() {
 		return lserrors.ErrBlockedByOthers
 	}
 
@@ -60,7 +58,7 @@ func (sess *RecvSession) AcceptFile(fileId string, fileMeta models.FileMeta) err
 }
 
 func (sess *RecvSession) Start() {
-	sess.started = true
+	sess.started.Store(true)
 }
 
 func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string, fileData []byte) error {
@@ -69,7 +67,7 @@ func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string,
 	}
 
 	// if a session is not started, it means the session is invalid
-	if !sess.started {
+	if !sess.started.Load() {
 		return lserrors.ErrRejected
 	}
 
@@ -123,8 +121,8 @@ func (sess *RecvSession) FileTokens() models.FileTokens {
 }
 
 func (sess *RecvSession) End() {
-	if sess.started { // make sure it ends once
-		sess.started = false
+	if sess.started.Load() { // make sure it ends once
+		sess.started.Store(false)
 		atomic.StoreInt64(&sess.filesCount, 0)
 
 		slog.Info("Session done", "session", sess.id)
@@ -134,5 +132,5 @@ func (sess *RecvSession) End() {
 func (sess *RecvSession) Stopped() bool {
 	fileLefts := atomic.LoadInt64(&sess.filesCount)
 
-	return (!sess.started) || (fileLefts == 0)
+	return (!sess.started.Load()) || (fileLefts == 0)
 }
