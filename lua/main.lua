@@ -118,6 +118,12 @@ function LocalSend:openFirewall()
         os.execute(string.format(
             "iptables -A OUTPUT -p udp --sport %s -j ACCEPT",
             self.port))
+        -- WebRTC/ICE UDP ports - must match range in peer.go SetEphemeralUDPPortRange
+        if self.use_webrtc then
+            os.execute("iptables -A INPUT -p udp --dport 50000:50100 -j ACCEPT")
+            os.execute("iptables -A OUTPUT -p udp --sport 50000:50100 -j ACCEPT")
+            logger.dbg("[LocalSend] Firewall opened for WebRTC UDP ports (50000-50100)")
+        end
         logger.dbg("[LocalSend] Firewall opened for port " .. self.port)
     end
 end
@@ -136,6 +142,9 @@ function LocalSend:closeFirewall()
         os.execute(string.format(
             "iptables -D OUTPUT -p udp --sport %s -j ACCEPT",
             self.port))
+        -- Clean up WebRTC UDP rules (ignore errors if they don't exist)
+        os.execute("iptables -D INPUT -p udp --dport 50000:50100 -j ACCEPT 2>/dev/null")
+        os.execute("iptables -D OUTPUT -p udp --sport 50000:50100 -j ACCEPT 2>/dev/null")
         logger.dbg("[LocalSend] Firewall closed for port " .. self.port)
     end
 end

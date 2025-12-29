@@ -45,9 +45,30 @@ func NewPeerConnection(config PeerConfig) (*PeerConnection, error) {
 		iceServers[i] = webrtc.ICEServer{URLs: []string{server}}
 	}
 
-	// Create peer connection
-	pc, err := webrtc.NewPeerConnection(webrtc.Configuration{
+	// Configure settings for better ICE connectivity
+	settingEngine := webrtc.SettingEngine{}
+
+	// Restrict ICE UDP ports to a known range for firewall configuration
+	// This range must match the firewall rules in the KOReader plugin
+	if err := settingEngine.SetEphemeralUDPPortRange(50000, 50100); err != nil {
+		return nil, fmt.Errorf("failed to set UDP port range: %w", err)
+	}
+
+	// Set ICE timeouts for better reliability on slower networks
+	settingEngine.SetICETimeouts(
+		5*time.Second,  // disconnectedTimeout - time before marking as disconnected
+		25*time.Second, // failedTimeout - time before marking as failed
+		2*time.Second,  // keepAliveInterval - STUN keepalive interval
+	)
+
+	// Create API with custom settings
+	api := webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine))
+
+	// Create peer connection with custom API
+	pc, err := api.NewPeerConnection(webrtc.Configuration{
 		ICEServers: iceServers,
+		// Use ICE candidate pool to speed up connectivity
+		ICECandidatePoolSize: 1,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer connection: %w", err)
@@ -75,13 +96,32 @@ func NewPeerConnection(config PeerConfig) (*PeerConnection, error) {
 	// Set up ICE connection state handler for debugging
 	pc.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		slog.Info("ICE connection state", "state", state.String())
+		// Log additional details when checking or failed
+		if state == webrtc.ICEConnectionStateChecking {
+			slog.Info("ICE checking - connectivity checks in progress")
+		}
+		if state == webrtc.ICEConnectionStateFailed {
+			slog.Error("ICE failed - no valid candidate pair found")
+		}
+	})
+
+	// Set up ICE gathering state handler
+	pc.OnICEGatheringStateChange(func(state webrtc.ICEGathererState) {
+		slog.Info("ICE gathering state", "state", state.String())
 	})
 
 	// Set up ICE candidate handler for debugging
 	pc.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate != nil {
-			slog.Debug("ICE candidate", "candidate", candidate.String())
+			slog.Info("ICE candidate gathered", "type", candidate.Typ.String(), "address", candidate.Address, "port", candidate.Port, "protocol", candidate.Protocol.String())
+		} else {
+			slog.Info("ICE gathering complete (null candidate)")
 		}
+	})
+
+	// Log when we receive any SCTP/data channel activity
+	pc.SCTP().OnError(func(err error) {
+		slog.Error("SCTP error", "error", err)
 	})
 
 	// If initiator, create data channel
@@ -270,9 +310,35 @@ func (p *PeerConnection) WaitBufferEmptyWithTimeout(timeout time.Duration) error
 	return p.WaitBufferEmpty(ctx)
 }
 
-// Close closes the peer connection.
+// Close closes the peer connection and waits for it to fully close.
 func (p *PeerConnection) Close() error {
-	return p.pc.Close()
+	if p.pc == nil {
+		return nil
+	}
+
+	// Close the data channel first if it exists
+	p.mu.Lock()
+	if p.dataChannel != nil {
+		p.dataChannel.Close()
+		p.dataChannel = nil
+	}
+	p.mu.Unlock()
+
+	err := p.pc.Close()
+	if err != nil {
+		return err
+	}
+
+	// Wait for connection state to become closed (up to 2 seconds)
+	for i := 0; i < 20; i++ {
+		state := p.pc.ConnectionState()
+		if state == webrtc.PeerConnectionStateClosed {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	return nil
 }
 
 // ConnectionState returns the current connection state.
