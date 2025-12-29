@@ -76,7 +76,7 @@ var Cmd = &cobra.Command{
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				startWebRTCReceiver(savetodir, pin, allowedExts)
+				startWebRTCReceiver(devname, savetodir, pin, allowedExts, recver.LogTransfer)
 			}()
 		}
 
@@ -87,7 +87,7 @@ var Cmd = &cobra.Command{
 	},
 }
 
-func startWebRTCReceiver(saveDir, pin string, allowedExts []string) {
+func startWebRTCReceiver(deviceName, saveDir, pin string, allowedExts []string, logTransfer func(filename string, size int64, sender string)) {
 	// Generate signing key for token
 	key, err := crypto.GenerateKeyPair()
 	if err != nil {
@@ -104,7 +104,7 @@ func startWebRTCReceiver(saveDir, pin string, allowedExts []string) {
 
 	// Connect to signaling server
 	info := signaling.ClientInfoWithoutID{
-		Alias:       lsutils.GenAlias(),
+		Alias:       deviceName,
 		Version:     "2.1",
 		DeviceModel: "LocalSend-CLI",
 		DeviceType:  "headless",
@@ -123,6 +123,11 @@ func startWebRTCReceiver(saveDir, pin string, allowedExts []string) {
 	// Create receiver
 	receiver := transfer.NewRTCReceiver(client, key, pin, saveDir)
 	defer receiver.Close()
+
+	// Set up file received handler for transfer logging
+	if logTransfer != nil {
+		receiver.OnFileReceived(logTransfer)
+	}
 
 	// Set up file selection handler with extension filtering
 	receiver.OnSelectFiles(func(files []transfer.RTCFileDto) []string {

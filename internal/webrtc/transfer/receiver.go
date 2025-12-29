@@ -1,8 +1,11 @@
 package transfer
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -10,6 +13,7 @@ import (
 	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/crypto"
+	"github.com/0w0mewo/localsend-cli/internal/localsend/session"
 	"github.com/0w0mewo/localsend-cli/internal/webrtc/signaling"
 )
 
@@ -47,9 +51,12 @@ type RTCReceiver struct {
 	// File writers
 	currentFileID string
 	fileWriters   map[string]*os.File
+	filePaths     map[string]string // fileId -> actual saved path
+	fileHashers   map[string]hash.Hash
 
 	// Callbacks
-	onSelectFiles func([]RTCFileDto) []string
+	onSelectFiles  func([]RTCFileDto) []string
+	onFileReceived func(filename string, size int64, sender string)
 }
 
 // NewRTCReceiver creates a new WebRTC receiver.
@@ -62,6 +69,8 @@ func NewRTCReceiver(sig *signaling.SignalingClient, key *crypto.SigningKey, pin,
 		state:       stateWaitNonce,
 		fileTokens:  make(map[string]string),
 		fileWriters: make(map[string]*os.File),
+		filePaths:   make(map[string]string),
+		fileHashers: make(map[string]hash.Hash),
 	}
 }
 
@@ -70,10 +79,43 @@ func (r *RTCReceiver) OnSelectFiles(handler func([]RTCFileDto) []string) {
 	r.onSelectFiles = handler
 }
 
+// OnFileReceived sets the callback for when a file is received.
+func (r *RTCReceiver) OnFileReceived(handler func(filename string, size int64, sender string)) {
+	r.onFileReceived = handler
+}
+
 // AcceptOffer accepts an incoming WebRTC offer.
 func (r *RTCReceiver) AcceptOffer(offer signaling.WsServerMessage) error {
 	if offer.Peer == nil {
 		return fmt.Errorf("offer missing peer info")
+	}
+
+	// Clean up any previous connection
+	r.mu.Lock()
+	hadPreviousPeer := r.peer != nil
+	if r.peer != nil {
+		r.peer.Close()
+		r.peer = nil
+	}
+	// Close any open file writers
+	for _, f := range r.fileWriters {
+		f.Close()
+	}
+	r.fileWriters = make(map[string]*os.File)
+	r.fileTokens = make(map[string]string)
+	r.filePaths = make(map[string]string)
+	r.fileHashers = make(map[string]hash.Hash)
+	r.files = nil
+	r.acceptedIDs = nil
+	r.currentFileID = ""
+	r.remoteNonce = nil
+	r.localNonce = nil
+	r.finalNonce = nil
+	r.pinAttempts = 0
+	r.mu.Unlock()
+
+	if hadPreviousPeer {
+		slog.Info("Cleaned up previous connection")
 	}
 
 	sdp, err := signaling.DecompressSDP(offer.SDP)
@@ -122,6 +164,14 @@ func (r *RTCReceiver) handleMessage(data []byte) {
 		if r.state == stateReceivingFiles && r.currentFileID != "" {
 			r.finishCurrentFile()
 			slog.Info("All files received, transfer complete")
+			// Close the peer connection after transfer (like official impl)
+			peer := r.peer
+			go func() {
+				time.Sleep(100 * time.Millisecond) // Brief delay to ensure response is sent
+				if peer != nil {
+					peer.Close()
+				}
+			}()
 		}
 		return
 	}
@@ -340,17 +390,19 @@ func (r *RTCReceiver) handleFileList(_ interface{}, msgType string, data []byte)
 		fileTokens[id] = token
 		r.fileTokens[id] = token
 
-		// Create file writer
+		// Create file writer with unique path
 		for _, f := range r.files {
 			if f.ID == id {
-				path := filepath.Join(r.saveDir, f.FileName)
+				path := session.FindUniquePath(r.saveDir, f.FileName)
 				file, err := os.Create(path)
 				if err != nil {
 					slog.Error("Failed to create file", "path", path, "error", err)
 					continue
 				}
 				r.fileWriters[id] = file
-				slog.Info("Ready to receive", "file", f.FileName)
+				r.filePaths[id] = path
+				r.fileHashers[id] = sha256.New()
+				slog.Info("Ready to receive", "file", filepath.Base(path))
 				break
 			}
 		}
@@ -397,6 +449,10 @@ func (r *RTCReceiver) handleBinaryData(data []byte) {
 			slog.Error("Failed to write data", "error", err)
 		} else {
 			slog.Debug("Wrote file data", "fileId", r.currentFileID, "bytes", n)
+			// Also write to hasher for checksum verification
+			if h, ok := r.fileHashers[r.currentFileID]; ok {
+				h.Write(data)
+			}
 		}
 	} else {
 		slog.Warn("No file writer for current file", "fileId", r.currentFileID)
@@ -410,20 +466,58 @@ func (r *RTCReceiver) finishCurrentFile() {
 	}
 
 	fileID := r.currentFileID
+	success := true
+	var errorMsg *string
 
 	// Close and sync the file
 	if f, ok := r.fileWriters[fileID]; ok {
 		f.Sync()
 		f.Close()
 		delete(r.fileWriters, fileID)
-		slog.Info("File received successfully", "fileId", fileID)
+
+		// Verify checksum if provided
+		path, pathOk := r.filePaths[fileID]
+		if h, ok := r.fileHashers[fileID]; ok {
+			checksum := hex.EncodeToString(h.Sum(nil))
+			delete(r.fileHashers, fileID)
+
+			// Find expected checksum from metadata
+			var expectedChecksum string
+			var size int64
+			for _, f := range r.files {
+				if f.ID == fileID {
+					expectedChecksum = f.SHA256
+					size = f.Size
+					break
+				}
+			}
+
+			if expectedChecksum != "" && checksum != expectedChecksum {
+				slog.Error("Checksum mismatch", "file", filepath.Base(path), "expected", expectedChecksum, "got", checksum)
+				success = false
+				msg := "checksum mismatch"
+				errorMsg = &msg
+				// Delete the corrupted file
+				if pathOk {
+					os.Remove(path)
+				}
+			} else if pathOk {
+				savedFilename := filepath.Base(path)
+				slog.Info("File received successfully", "file", savedFilename)
+
+				// Call the onFileReceived callback
+				if r.onFileReceived != nil {
+					r.onFileReceived(savedFilename, size, "WebRTC")
+				}
+			}
+		}
 	}
 
-	// Send success response to sender (required by protocol)
+	// Send response to sender (required by protocol)
 	response := RTCSendFileResponse{
 		ID:      fileID,
-		Success: true,
-		Error:   nil,
+		Success: success,
+		Error:   errorMsg,
 	}
 	if err := r.sendJSON(response); err != nil {
 		slog.Error("Failed to send file response", "error", err)

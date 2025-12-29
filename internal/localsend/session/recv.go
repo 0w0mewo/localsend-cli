@@ -68,9 +68,9 @@ func (sess *RecvSession) Start() {
 	sess.started.Store(true)
 }
 
-// findUniquePath returns a unique file path by appending a counter if the file already exists.
+// FindUniquePath returns a unique file path by appending a counter if the file already exists.
 // For example: "file.txt" -> "file (1).txt" -> "file (2).txt"
-func findUniquePath(dir, filename string) string {
+func FindUniquePath(dir, filename string) string {
 	path := filepath.Join(dir, filename)
 
 	// If file doesn't exist, use the original name
@@ -119,7 +119,7 @@ func (sess *RecvSession) SaveFile(saveToDir string, fileId string, token string,
 	}
 
 	// write the file data to disk while calculating checksum simultaneously
-	saveAs := findUniquePath(saveToDir, expectedMeta.Filename)
+	saveAs := FindUniquePath(saveToDir, expectedMeta.Filename)
 	hasher := sha256.New()
 	file, err := os.Create(saveAs)
 	if err != nil {
