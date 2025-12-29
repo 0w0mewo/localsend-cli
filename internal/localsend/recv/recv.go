@@ -30,6 +30,10 @@ type FileReceiver struct {
 	expectedPin       string
 	allowedExtensions []string // New field for extension filtering
 	transferLogPath   string   // Path to transfer log file
+
+	// V3 nonce caches for token verification
+	receivedNonceCache  *localsend.NonceCache // nonces received from clients
+	generatedNonceCache *localsend.NonceCache // nonces generated for clients
 }
 
 // TransferLogEntry represents a single transfer log entry
@@ -42,12 +46,14 @@ type TransferLogEntry struct {
 
 func NewFileReceiver(devname string, saveToDir string, supportHttps bool) *FileReceiver {
 	return &FileReceiver{
-		identity:          models.NewDeviceInfo(devname, lsutils.GenFingerprint()),
-		webServer:         lsutils.NewWebServer(),
-		supportHttps:      supportHttps,
-		saveToDir:         saveToDir,
-		sessman:           sess.NewRecvSessManager(),
-		allowedExtensions: nil, // nil means accept all
+		identity:            models.NewDeviceInfo(devname, lsutils.GenFingerprint()),
+		webServer:           lsutils.NewWebServer(),
+		supportHttps:        supportHttps,
+		saveToDir:           saveToDir,
+		sessman:             sess.NewRecvSessManager(),
+		allowedExtensions:   nil, // nil means accept all
+		receivedNonceCache:  localsend.NewNonceCache(200),
+		generatedNonceCache: localsend.NewNonceCache(200),
 	}
 }
 
@@ -160,6 +166,8 @@ func (fr *FileReceiver) Init() error {
 
 func (fr *FileReceiver) Start() error {
 	server := fr.webServer
+
+	// V2 routes
 	server.Post(constants.PreuploadPath, fr.preUploadHandler)
 	server.Post(constants.UploadPath, fr.uploadHandler)
 	server.Post(constants.CancelPath, fr.cancelHandler)
@@ -167,6 +175,11 @@ func (fr *FileReceiver) Start() error {
 	server.Get(constants.InfoPathV1, fr.infoHandler)
 	server.Post(constants.RegisterPath, fr.registerHandler)
 	server.Post(constants.RegisterPathV1, fr.registerHandler)
+
+	// V3 routes
+	server.Post(constants.NoncePathV3, fr.nonceExchangeHandler)
+	server.Post(constants.RegisterPathV3, fr.registerV3Handler)
+
 	slog.Info("Waiting for files (Ctrl-C to terminate)")
 
 	go fr.advertise() // let others know we are here

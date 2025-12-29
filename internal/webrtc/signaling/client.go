@@ -112,8 +112,10 @@ func (c *SignalingClient) waitForHello() error {
 	}
 
 	c.client = *msg.Client
-	for _, peer := range msg.Peers {
-		c.peers[peer.ID] = peer
+	if msg.Peers != nil {
+		for _, peer := range *msg.Peers {
+			c.peers[peer.ID] = peer
+		}
 	}
 
 	return nil

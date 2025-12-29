@@ -17,8 +17,11 @@ type DeviceInfo struct {
 	Version     string `json:"version"`
 	DeviceModel string `json:"deviceModel,omitempty"` // nullable per protocol
 	DeviceType  string `json:"deviceType,omitempty"`  // nullable per protocol
-	Fingerprint string `json:"fingerprint"`
-	Download    bool   `json:"download,omitempty"` // optional, default false
+	Fingerprint string `json:"fingerprint,omitempty"` // v2.1 field
+	Token       string `json:"token,omitempty"`       // v3 field - replaces fingerprint
+	Download    bool   `json:"download,omitempty"`    // optional, default false
+	// v3 fields
+	HasWebInterface bool `json:"hasWebInterface,omitempty"` // v3: whether device has web UI
 }
 
 // SenderInfo extends DeviceInfo with port and protocol fields.

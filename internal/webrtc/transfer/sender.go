@@ -420,9 +420,13 @@ func (s *RTCSender) SendFiles() error {
 		return fmt.Errorf("failed to send final delimiter: %w", err)
 	}
 
-	// Wait for receiver to process files (give time for buffer to flush)
-	slog.Info("Waiting for receiver to process files...")
-	time.Sleep(2 * time.Second)
+	// Wait for buffer to actually flush instead of fixed sleep
+	// This is critical per protocol spec to ensure all data is delivered
+	slog.Info("Waiting for buffer to flush...")
+	if err := s.peer.WaitBufferEmptyWithTimeout(10 * time.Second); err != nil {
+		slog.Warn("Timeout waiting for buffer flush, continuing anyway", "error", err)
+		// Don't return error - allow graceful degradation
+	}
 
 	s.state = senderStateDone
 	return nil

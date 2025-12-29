@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"log/slog"
 
+	"github.com/0w0mewo/localsend-cli/internal/crypto"
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/gofiber/fiber/v2"
@@ -134,4 +135,79 @@ func (fr *FileReceiver) registerHandler(c *fiber.Ctx) error {
 
 	// Respond with our device info
 	return c.JSON(&fr.identity)
+}
+
+// nonceExchangeHandler implements POST /api/localsend/v3/nonce
+// This exchanges nonces for secure token verification in v3 protocol.
+func (fr *FileReceiver) nonceExchangeHandler(c *fiber.Ctx) error {
+	var req models.NonceRequest
+	if err := c.BodyParser(&req); err != nil {
+		slog.Warn("Invalid nonce request", "error", err, "remote", c.IP())
+		return c.SendStatus(400)
+	}
+
+	// Decode nonce from base64
+	nonce, err := crypto.DecodeNonce(req.Nonce)
+	if err != nil {
+		slog.Warn("Invalid nonce format", "error", err, "remote", c.IP())
+		return c.SendStatus(400)
+	}
+
+	// Validate nonce length (16-128 bytes per protocol spec)
+	if !crypto.ValidateNonce(nonce) {
+		slog.Warn("Invalid nonce length", "length", len(nonce), "remote", c.IP())
+		return c.SendStatus(400)
+	}
+
+	// Get client identifier (IP for now, could be cert public key for HTTPS)
+	clientID := c.IP()
+
+	// Store received nonce from client
+	fr.receivedNonceCache.Put(clientID, nonce)
+
+	// Generate new nonce for client
+	newNonce, err := crypto.GenerateNonce()
+	if err != nil {
+		slog.Error("Failed to generate nonce", "error", err)
+		return c.SendStatus(500)
+	}
+
+	// Store generated nonce for later verification
+	fr.generatedNonceCache.Put(clientID, newNonce)
+
+	// Return response with base64-encoded nonce
+	resp := models.NonceResponse{
+		Nonce: crypto.EncodeNonce(newNonce),
+	}
+
+	slog.Info("Nonce exchange successful",
+		"remote", clientID,
+		"clientNonceLen", len(nonce),
+		"serverNonceLen", len(newNonce))
+
+	return c.JSON(&resp)
+}
+
+// registerV3Handler implements POST /api/localsend/v3/register
+// This handles device registration with v3 protocol fields.
+func (fr *FileReceiver) registerV3Handler(c *fiber.Ctx) error {
+	var req models.RegisterRequestV3
+	if err := c.BodyParser(&req); err != nil {
+		slog.Error("Failed to parse v3 register request", "error", err)
+		return c.SendStatus(400)
+	}
+
+	// Build response from our identity
+	resp := models.RegisterResponseV3{
+		Alias:           fr.identity.Alias,
+		Version:         fr.identity.Version,
+		DeviceModel:     fr.identity.DeviceModel,
+		DeviceType:      constants.DeviceTypeToV3(fr.identity.DeviceType),
+		Token:           fr.identity.Token,
+		HasWebInterface: false, // CLI doesn't have web interface
+	}
+
+	slog.Info("V3 register received", "remote", c.IP(), "sender", req.Alias)
+
+	return c.JSON(&resp)
 }

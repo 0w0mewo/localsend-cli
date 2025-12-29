@@ -1,9 +1,11 @@
 package transfer
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/pion/webrtc/v3"
 )
@@ -226,6 +228,46 @@ func (p *PeerConnection) SendText(text string) error {
 	}
 
 	return dc.SendText(text)
+}
+
+// BufferedAmount returns the number of bytes queued in the data channel buffer.
+func (p *PeerConnection) BufferedAmount() uint64 {
+	p.mu.Lock()
+	dc := p.dataChannel
+	p.mu.Unlock()
+
+	if dc == nil {
+		return 0
+	}
+
+	return dc.BufferedAmount()
+}
+
+// WaitBufferEmpty polls until the data channel buffer is empty.
+// Uses 10ms polling interval.
+// Returns error if context is cancelled.
+func (p *PeerConnection) WaitBufferEmpty(ctx context.Context) error {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if p.BufferedAmount() == 0 {
+				return nil
+			}
+		}
+	}
+}
+
+// WaitBufferEmptyWithTimeout is WaitBufferEmpty with a timeout.
+func (p *PeerConnection) WaitBufferEmptyWithTimeout(timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	return p.WaitBufferEmpty(ctx)
 }
 
 // Close closes the peer connection.

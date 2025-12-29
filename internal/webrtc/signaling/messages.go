@@ -7,10 +7,10 @@ import (
 
 // WsServerMessage represents messages from the signaling server.
 type WsServerMessage struct {
-	Type      string       `json:"type"` // HELLO, JOIN, UPDATE, LEFT, OFFER, ANSWER, ERROR
-	Client    *ClientInfo  `json:"client,omitempty"`
-	Peers     []ClientInfo `json:"peers,omitempty"`
-	Peer      *ClientInfo  `json:"peer,omitempty"`
+	Type      string        `json:"type"` // HELLO, JOIN, UPDATE, LEFT, OFFER, ANSWER, ERROR
+	Client    *ClientInfo   `json:"client,omitempty"`
+	Peers     *[]ClientInfo `json:"peers,omitempty"` // Use pointer to allow [] when empty but present
+	Peer      *ClientInfo   `json:"peer,omitempty"`
 	PeerID    *uuid.UUID   `json:"peerId,omitempty"`
 	SessionID string       `json:"sessionId,omitempty"`
 	SDP       string       `json:"sdp,omitempty"`

@@ -20,8 +20,10 @@ func TestValidateNonce(t *testing.T) {
 		size  int
 		valid bool
 	}{
-		{15, false},  // Too small
-		{16, true},   // Minimum valid
+		{7, false},   // Too small
+		{8, false},   // Too small for nonce (timestamps use ValidateSalt)
+		{15, false},  // Still too small
+		{16, true},   // Minimum valid for nonce
 		{32, true},   // Default size
 		{128, true},  // Maximum valid
 		{129, false}, // Too large
@@ -32,6 +34,28 @@ func TestValidateNonce(t *testing.T) {
 		got := ValidateNonce(nonce)
 		if got != tt.valid {
 			t.Errorf("ValidateNonce(size=%d) = %v; want %v", tt.size, got, tt.valid)
+		}
+	}
+}
+
+func TestValidateSalt(t *testing.T) {
+	tests := []struct {
+		size  int
+		valid bool
+	}{
+		{7, false},   // Too small
+		{8, true},    // Minimum valid (timestamps)
+		{16, true},   // Nonce size
+		{32, true},   // Default nonce size
+		{128, true},  // Maximum valid
+		{129, false}, // Too large
+	}
+
+	for _, tt := range tests {
+		salt := make([]byte, tt.size)
+		got := ValidateSalt(salt)
+		if got != tt.valid {
+			t.Errorf("ValidateSalt(size=%d) = %v; want %v", tt.size, got, tt.valid)
 		}
 	}
 }

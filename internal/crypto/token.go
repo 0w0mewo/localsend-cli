@@ -1,11 +1,15 @@
 package crypto
 
 import (
+	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"strings"
@@ -28,6 +32,12 @@ type VerifyingKey interface {
 // Ed25519VerifyingKey implements VerifyingKey for Ed25519.
 type Ed25519VerifyingKey struct {
 	publicKey ed25519.PublicKey
+}
+
+// RsaPssVerifyingKey implements VerifyingKey for RSA-PSS.
+// This is used by some LocalSend clients that use RSA keys instead of Ed25519.
+type RsaPssVerifyingKey struct {
+	publicKey *rsa.PublicKey
 }
 
 // GenerateKeyPair creates a new Ed25519 key pair for token signing.
@@ -63,8 +73,13 @@ func (k *SigningKey) GenerateTokenTimestamp() (string, error) {
 // GenerateToken generates a signed token with the given salt.
 // Format: sha256.{hash_base64}.{salt_base64}.ed25519.{signature_base64}
 func (k *SigningKey) GenerateToken(salt []byte) (string, error) {
-	// Create digest: SHA256(publicKey || salt)
-	digest := createDigest(k.publicKey, salt)
+	// Create digest: SHA256(publicKeyDER || salt)
+	// LocalSend protocol requires SPKI (PKIX) DER format for hashing.
+	pubKeyDER, err := x509.MarshalPKIXPublicKey(k.publicKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal public key to DER: %w", err)
+	}
+	digest := createDigestFromDER(pubKeyDER, salt)
 
 	// Sign the digest
 	signature := ed25519.Sign(k.privateKey, digest)
@@ -180,11 +195,10 @@ func ExtractSignatureMethod(token string) string {
 }
 
 // createDigest creates SHA256(publicKey || salt).
+// Deprecated: use createDigestFromDER which uses SPKI format required by protocol.
 func createDigest(publicKey ed25519.PublicKey, salt []byte) []byte {
-	h := sha256.New()
-	h.Write(publicKey)
-	h.Write(salt)
-	return h.Sum(nil)
+	pubKeyDER, _ := x509.MarshalPKIXPublicKey(publicKey)
+	return createDigestFromDER(pubKeyDER, salt)
 }
 
 // createDigestFromDER creates SHA256(publicKeyDER || salt).
@@ -205,13 +219,35 @@ func (k *Ed25519VerifyingKey) Verify(msg, signature []byte) error {
 }
 
 func (k *Ed25519VerifyingKey) ToDER() ([]byte, error) {
-	// For Ed25519, the public key bytes are the DER-like representation
-	// In a full implementation, this would be proper ASN.1 DER encoding
-	return k.publicKey, nil
+	// LocalSend's Ed25519 public keys in token hashes use SPKI (PKIX) DER format.
+	return x509.MarshalPKIXPublicKey(k.publicKey)
 }
 
 func (k *Ed25519VerifyingKey) SignatureMethod() string {
 	return "ed25519"
+}
+
+// RsaPssVerifyingKey implementation
+
+func (k *RsaPssVerifyingKey) Verify(msg, signature []byte) error {
+	// RSA-PSS uses SHA-256 for hashing the message
+	hashed := sha256.Sum256(msg)
+	opts := &rsa.PSSOptions{
+		SaltLength: rsa.PSSSaltLengthEqualsHash,
+		Hash:       crypto.SHA256,
+	}
+	if err := rsa.VerifyPSS(k.publicKey, crypto.SHA256, hashed[:], signature, opts); err != nil {
+		return errors.New("rsa-pss signature verification failed")
+	}
+	return nil
+}
+
+func (k *RsaPssVerifyingKey) ToDER() ([]byte, error) {
+	return x509.MarshalPKIXPublicKey(k.publicKey)
+}
+
+func (k *RsaPssVerifyingKey) SignatureMethod() string {
+	return "rsa-pss"
 }
 
 // ParsePublicKey parses a public key for verification.
@@ -224,5 +260,28 @@ func ParsePublicKey(keyBytes []byte, kind string) (VerifyingKey, error) {
 		return &Ed25519VerifyingKey{publicKey: keyBytes}, nil
 	default:
 		return nil, fmt.Errorf("unsupported key type: %s", kind)
+	}
+}
+
+// ParsePublicKeyPEM parses a public key from a PEM string.
+func ParsePublicKeyPEM(pemStr string) (VerifyingKey, error) {
+	block, _ := pem.Decode([]byte(pemStr))
+	if block == nil {
+		return nil, errors.New("failed to decode PEM block")
+	}
+
+	// LocalSend's Ed25519 public keys in PEM are PKIX format
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse PKIX public key: %w", err)
+	}
+
+	switch v := pub.(type) {
+	case ed25519.PublicKey:
+		return &Ed25519VerifyingKey{publicKey: v}, nil
+	case *rsa.PublicKey:
+		return &RsaPssVerifyingKey{publicKey: v}, nil
+	default:
+		return nil, fmt.Errorf("unsupported public key type in PEM: %T", pub)
 	}
 }

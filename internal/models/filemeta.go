@@ -4,6 +4,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/utils"
@@ -14,6 +15,19 @@ import (
 type FileMetadata struct {
 	Modified string `json:"modified,omitempty"`
 	Accessed string `json:"accessed,omitempty"`
+}
+
+// getAccessTime extracts the access time from FileInfo
+// Falls back to modification time if access time cannot be retrieved
+func getAccessTime(fi os.FileInfo) time.Time {
+	if stat, ok := fi.Sys().(*syscall.Stat_t); ok {
+		// Platform-specific access time extraction
+		// On macOS/BSD: Atimespec
+		// On Linux: Atim
+		return time.Unix(stat.Atimespec.Sec, stat.Atimespec.Nsec)
+	}
+	// Fallback to modification time
+	return fi.ModTime()
 }
 
 type FileMeta struct {
@@ -51,6 +65,7 @@ func GenFileMeta(fpath string) (FileMeta, error) {
 		Checksum: checksum,
 		Metadata: &FileMetadata{
 			Modified: fd.ModTime().Format(time.RFC3339),
+			Accessed: getAccessTime(fd).Format(time.RFC3339),
 		},
 		FullPath: fpath,
 	}, nil
