@@ -117,7 +117,12 @@ func (r *RTCReceiver) handleMessage(data []byte) {
 
 	// Check for delimiter (string message with len <= 1, like "0")
 	if len(data) <= 1 {
-		slog.Debug("Delimiter received, skipping")
+		slog.Debug("Delimiter received")
+		// If we were receiving a file, this signals end of all transfers
+		if r.state == stateReceivingFiles && r.currentFileID != "" {
+			r.finishCurrentFile()
+			slog.Info("All files received, transfer complete")
+		}
 		return
 	}
 
@@ -128,6 +133,8 @@ func (r *RTCReceiver) handleMessage(data []byte) {
 			// This might be a file header for next file
 			var header RTCSendFileHeader
 			if err := json.Unmarshal(data, &header); err == nil && header.ID != "" {
+				// Finish current file before starting next
+				r.finishCurrentFile()
 				slog.Info("Received file header", "id", header.ID)
 				r.currentFileID = header.ID
 				return
@@ -316,7 +323,12 @@ func (r *RTCReceiver) handleFileList(_ interface{}, msgType string, data []byte)
 
 	if len(acceptedIDs) == 0 {
 		response := RTCFileListResponse{Status: "DECLINED"}
-		r.sendJSON(response)
+		if err := r.sendJSONBinary(response); err != nil {
+			slog.Error("Failed to send decline response", "error", err)
+		}
+		if err := r.sendDelimiter(); err != nil {
+			slog.Error("Failed to send delimiter", "error", err)
+		}
 		slog.Info("Declined all files")
 		return
 	}
@@ -384,12 +396,40 @@ func (r *RTCReceiver) handleBinaryData(data []byte) {
 		if err != nil {
 			slog.Error("Failed to write data", "error", err)
 		} else {
-			slog.Info("Wrote file data", "fileId", r.currentFileID, "bytes", n)
-			f.Sync() // Ensure data is flushed to disk
+			slog.Debug("Wrote file data", "fileId", r.currentFileID, "bytes", n)
 		}
 	} else {
 		slog.Warn("No file writer for current file", "fileId", r.currentFileID)
 	}
+}
+
+// finishCurrentFile closes the current file and sends a success response to the sender.
+func (r *RTCReceiver) finishCurrentFile() {
+	if r.currentFileID == "" {
+		return
+	}
+
+	fileID := r.currentFileID
+
+	// Close and sync the file
+	if f, ok := r.fileWriters[fileID]; ok {
+		f.Sync()
+		f.Close()
+		delete(r.fileWriters, fileID)
+		slog.Info("File received successfully", "fileId", fileID)
+	}
+
+	// Send success response to sender (required by protocol)
+	response := RTCSendFileResponse{
+		ID:      fileID,
+		Success: true,
+		Error:   nil,
+	}
+	if err := r.sendJSON(response); err != nil {
+		slog.Error("Failed to send file response", "error", err)
+	}
+
+	r.currentFileID = ""
 }
 
 // sendJSON sends a JSON message through the data channel as text (for simple responses).

@@ -2,6 +2,7 @@ package recv
 
 import (
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -63,10 +64,19 @@ var Cmd = &cobra.Command{
 
 		// WebRTC receiver
 		if webrtcMode {
+			// Parse extensions for WebRTC receiver too
+			var allowedExts []string
+			if acceptExt != "" {
+				allowedExts = strings.Split(acceptExt, ",")
+				for i, ext := range allowedExts {
+					allowedExts[i] = strings.TrimSpace(strings.ToLower(ext))
+				}
+			}
+
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				startWebRTCReceiver(savetodir, pin)
+				startWebRTCReceiver(savetodir, pin, allowedExts)
 			}()
 		}
 
@@ -77,7 +87,7 @@ var Cmd = &cobra.Command{
 	},
 }
 
-func startWebRTCReceiver(saveDir, pin string) {
+func startWebRTCReceiver(saveDir, pin string, allowedExts []string) {
 	// Generate signing key for token
 	key, err := crypto.GenerateKeyPair()
 	if err != nil {
@@ -114,12 +124,32 @@ func startWebRTCReceiver(saveDir, pin string) {
 	receiver := transfer.NewRTCReceiver(client, key, pin, saveDir)
 	defer receiver.Close()
 
-	// Set up file selection handler (accept all files)
+	// Set up file selection handler with extension filtering
 	receiver.OnSelectFiles(func(files []transfer.RTCFileDto) []string {
-		ids := make([]string, len(files))
-		for i, f := range files {
-			slog.Info("Receiving file via WebRTC", "name", f.FileName, "size", f.Size)
-			ids[i] = f.ID
+		var ids []string
+		for _, f := range files {
+			// Check extension filter
+			if len(allowedExts) > 0 {
+				ext := filepath.Ext(f.FileName)
+				if ext == "" {
+					slog.Info("Rejecting file (no extension)", "name", f.FileName)
+					continue
+				}
+				ext = strings.ToLower(ext[1:]) // Remove leading dot
+				allowed := false
+				for _, a := range allowedExts {
+					if ext == a {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					slog.Info("Rejecting file (extension not allowed)", "name", f.FileName, "ext", ext)
+					continue
+				}
+			}
+			slog.Info("Accepting file via WebRTC", "name", f.FileName, "size", f.Size)
+			ids = append(ids, f.ID)
 		}
 		return ids
 	})
