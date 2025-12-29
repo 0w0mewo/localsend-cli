@@ -53,6 +53,7 @@ function LocalSend:init()
     self.autostart = G_reader_settings:isTrue("LocalSend_autostart")
     self.pin = G_reader_settings:readSetting("LocalSend_pin") or ""
     self.accept_ext = G_reader_settings:readSetting("LocalSend_accept_ext") or ""
+    self.use_webrtc = G_reader_settings:isTrue("LocalSend_use_webrtc") -- Experimental, off by default
     self.last_transfer_count = 0
 
     if self.autostart then
@@ -301,6 +302,10 @@ function LocalSend:start()
 
     if not self.use_https then
         cmd = string.format("%s --https=false", cmd)
+    end
+
+    if not self.use_webrtc then
+        cmd = string.format("%s -w=false", cmd)
     end
 
     -- Open firewall before starting
@@ -857,6 +862,15 @@ function LocalSend:addToMainMenu(menu_items)
                             self.autostart = not self.autostart
                             G_reader_settings:flipNilOrFalse("LocalSend_autostart")
                         end,
+                    },
+                    {
+                        text = _("Enable WebRTC Support (Experimental)"),
+                        checked_func = function() return self.use_webrtc end,
+                        callback = function()
+                            self.use_webrtc = not self.use_webrtc
+                            G_reader_settings:flipNilOrFalse("LocalSend_use_webrtc")
+                        end,
+                        help_text = _("Connect to public signaling server for WebRTC transfers. Requires internet access."),
                     },
                     {
                         text = _("Rotate certificates"),
