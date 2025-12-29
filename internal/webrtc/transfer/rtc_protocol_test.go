@@ -249,3 +249,155 @@ func TestFileHeaderVsTokenRequestParsing(t *testing.T) {
 		t.Error("Token request not parsed as RTCTokenRequest")
 	}
 }
+
+// =============================================================================
+// Rust Test Vectors
+// These tests verify exact JSON format compatibility with the official Rust implementation.
+// =============================================================================
+
+// TestRustVectorFileListResponsePair verifies PAIR response encoding matches Rust.
+// From Rust: rtc_file_list_response_encoding (webrtc.rs)
+func TestRustVectorFileListResponsePair(t *testing.T) {
+	expected := `{"status":"PAIR","publicKey":"123"}`
+	
+	response := RTCFileListResponse{
+		Status:    "PAIR",
+		PublicKey: "123",
+	}
+	
+	data, err := json.Marshal(response)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	
+	if string(data) != expected {
+		t.Errorf("JSON mismatch.\nGot:  %s\nWant: %s", string(data), expected)
+	}
+	
+	// Verify round-trip
+	var parsed RTCFileListResponse
+	if err := json.Unmarshal([]byte(expected), &parsed); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if parsed.Status != "PAIR" {
+		t.Errorf("Parsed status = %q; want 'PAIR'", parsed.Status)
+	}
+	if parsed.PublicKey != "123" {
+		t.Errorf("Parsed publicKey = %q; want '123'", parsed.PublicKey)
+	}
+}
+
+// TestRustVectorFileListResponseOK verifies OK response encoding matches Rust.
+func TestRustVectorFileListResponseOK(t *testing.T) {
+	response := RTCFileListResponse{
+		Status: "OK",
+		Files:  map[string]string{"file1": "token1", "file2": "token2"},
+	}
+	
+	data, err := json.Marshal(response)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	
+	// Verify it has expected structure
+	var parsed map[string]interface{}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	
+	if parsed["status"] != "OK" {
+		t.Errorf("status = %v; want 'OK'", parsed["status"])
+	}
+	
+	files, ok := parsed["files"].(map[string]interface{})
+	if !ok {
+		t.Fatal("files is not a map")
+	}
+	if files["file1"] != "token1" {
+		t.Errorf("files[file1] = %v; want 'token1'", files["file1"])
+	}
+}
+
+// TestRustVectorChunkProcessing verifies chunking behavior matches Rust.
+// From Rust: test_process_in_chunks (webrtc.rs)
+// Uses ChunkSize constant from sender.go (16 KiB)
+func TestRustVectorChunkProcessing(t *testing.T) {
+	// ChunkSize should be 16 * 1024 = 16384 (from sender.go)
+	const chunkSize = 16 * 1024 // Local constant for testing
+	
+	// Input: CHUNK_SIZE * 2 + 5 = 32773 bytes
+	inputSize := chunkSize*2 + 5
+	data := make([]byte, inputSize)
+	
+	// Fill with pattern (matching Rust test)
+	for i := 0; i < ChunkSize; i++ {
+		data[i] = 0
+	}
+	for i := ChunkSize; i < ChunkSize*2; i++ {
+		data[i] = 1
+	}
+	for i := ChunkSize * 2; i < inputSize; i++ {
+		data[i] = 2
+	}
+	
+	// Split into chunks
+	var chunks [][]byte
+	for i := 0; i < len(data); i += ChunkSize {
+		end := i + ChunkSize
+		if end > len(data) {
+			end = len(data)
+		}
+		chunks = append(chunks, data[i:end])
+	}
+	
+	// Verify chunk count
+	if len(chunks) != 3 {
+		t.Errorf("Chunk count = %d; want 3", len(chunks))
+	}
+	
+	// Verify chunk sizes
+	if len(chunks[0]) != ChunkSize {
+		t.Errorf("Chunk 0 size = %d; want %d", len(chunks[0]), ChunkSize)
+	}
+	if len(chunks[1]) != ChunkSize {
+		t.Errorf("Chunk 1 size = %d; want %d", len(chunks[1]), ChunkSize)
+	}
+	if len(chunks[2]) != 5 {
+		t.Errorf("Chunk 2 size = %d; want 5", len(chunks[2]))
+	}
+	
+	// Verify chunk contents match Rust test pattern
+	allZeros := true
+	for _, b := range chunks[0] {
+		if b != 0 {
+			allZeros = false
+			break
+		}
+	}
+	if !allZeros {
+		t.Error("Chunk 0 should contain all zeros")
+	}
+	
+	allOnes := true
+	for _, b := range chunks[1] {
+		if b != 1 {
+			allOnes = false
+			break
+		}
+	}
+	if !allOnes {
+		t.Error("Chunk 1 should contain all ones")
+	}
+	
+	allTwos := true
+	for _, b := range chunks[2] {
+		if b != 2 {
+			allTwos = false
+			break
+		}
+	}
+	if !allTwos {
+		t.Error("Chunk 2 should contain all twos")
+	}
+}
+

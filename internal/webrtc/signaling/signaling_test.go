@@ -142,3 +142,111 @@ func TestClientInfoToAnnouncement(t *testing.T) {
 		t.Errorf("Fingerprint = %q; want 'fingerprint-abc'", anno.Fingerprint)
 	}
 }
+
+// =============================================================================
+// Rust Test Vectors
+// These tests verify exact JSON format compatibility with the official Rust implementation.
+// =============================================================================
+
+// TestRustVectorHelloMessage verifies exact JSON format from Rust tests.
+func TestRustVectorHelloMessage(t *testing.T) {
+	// From Rust: ws_server_hello_message_encoding (signaling.rs)
+	expected := `{"type":"HELLO","client":{"id":"00000000-0000-0000-0000-000000000000","alias":"Cute Apple","version":"2.3","deviceModel":"Dell","deviceType":"desktop","token":"123"},"peers":[]}`
+
+	msg := WsServerMessage{
+		Type: "HELLO",
+		Client: &ClientInfo{
+			ID:          uuid.MustParse("00000000-0000-0000-0000-000000000000"),
+			Alias:       "Cute Apple",
+			Version:     "2.3",
+			DeviceModel: "Dell",
+			DeviceType:  "desktop",
+			Token:       "123",
+		},
+		Peers: []ClientInfo{},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	if string(data) != expected {
+		t.Errorf("JSON mismatch.\nGot:  %s\nWant: %s", string(data), expected)
+	}
+
+	// Verify round-trip
+	var parsed WsServerMessage
+	if err := json.Unmarshal([]byte(expected), &parsed); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if parsed.Client.Alias != "Cute Apple" {
+		t.Errorf("Parsed alias = %q; want 'Cute Apple'", parsed.Client.Alias)
+	}
+}
+
+// TestRustVectorOfferMessage verifies exact JSON format from Rust tests.
+func TestRustVectorOfferMessage(t *testing.T) {
+	// From Rust: ws_server_offer_message_encoding (signaling.rs)
+	// Note: deviceModel is omitted when empty
+	expected := `{"type":"OFFER","peer":{"id":"00000000-0000-0000-0000-000000000000","alias":"Cute Apple","version":"2.3","deviceType":"desktop","token":"123"},"sessionId":"456","sdp":"my-sdp"}`
+
+	msg := WsServerMessage{
+		Type: "OFFER",
+		Peer: &ClientInfo{
+			ID:          uuid.MustParse("00000000-0000-0000-0000-000000000000"),
+			Alias:       "Cute Apple",
+			Version:     "2.3",
+			DeviceModel: "", // Empty - should be omitted
+			DeviceType:  "desktop",
+			Token:       "123",
+		},
+		SessionID: "456",
+		SDP:       "my-sdp",
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	if string(data) != expected {
+		t.Errorf("JSON mismatch.\nGot:  %s\nWant: %s", string(data), expected)
+	}
+}
+
+// TestRustVectorClientUpdateMessage verifies exact JSON format from Rust tests.
+func TestRustVectorClientUpdateMessage(t *testing.T) {
+	// From Rust: ws_client_update_message_encoding (signaling.rs)
+	expected := `{"type":"UPDATE","info":{"alias":"Cute Apple","version":"2.3","deviceModel":"Dell","deviceType":"desktop","token":"123"}}`
+
+	msg := WsClientMessage{
+		Type: "UPDATE",
+		Info: &ClientInfoWithoutID{
+			Alias:       "Cute Apple",
+			Version:     "2.3",
+			DeviceModel: "Dell",
+			DeviceType:  "desktop",
+			Token:       "123",
+		},
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	if string(data) != expected {
+		t.Errorf("JSON mismatch.\nGot:  %s\nWant: %s", string(data), expected)
+	}
+
+	// Verify round-trip
+	var parsed WsClientMessage
+	if err := json.Unmarshal([]byte(expected), &parsed); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if parsed.Info.Alias != "Cute Apple" {
+		t.Errorf("Parsed alias = %q; want 'Cute Apple'", parsed.Info.Alias)
+	}
+}
+
