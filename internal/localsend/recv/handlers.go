@@ -82,12 +82,16 @@ func (fr *FileReceiver) uploadHandler(c *fiber.Ctx) error {
 	fileId := c.Query("fileId")
 	token := c.Query("token")
 
+	slog.Info("Upload request", "remote", c.IP(), "session", sessionId, "fileId", fileId)
+
 	if sessionId == "" || fileId == "" || token == "" {
+		slog.Warn("Upload missing params", "session", sessionId, "fileId", fileId, "hasToken", token != "")
 		return c.SendStatus(400)
 	}
 
 	session, err := fr.sessman.GetSession(sessionId)
 	if err != nil {
+		slog.Warn("Upload invalid session", "session", sessionId, "error", err)
 		return c.SendStatus(403) // Invalid session = rejected per protocol spec
 	}
 

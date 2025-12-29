@@ -8,6 +8,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -97,10 +98,13 @@ func GenAndSaveTLScert(privKeyFile, certFile string) (tls.Certificate, error) {
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().AddDate(1, 0, 0),
-		KeyUsage:              x509.KeyUsageDigitalSignature,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IsCA:                  false,
+		// SAN is required by modern TLS clients (iOS, etc.)
+		DNSNames:    []string{"localhost", "localsend"},
+		IPAddresses: []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("0.0.0.0")},
 	}
 
 	privkey, err := rsa.GenerateKey(rand.Reader, 4096)
