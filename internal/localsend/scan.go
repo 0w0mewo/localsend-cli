@@ -58,7 +58,7 @@ func NewDiscoverier(devInfo models.DeviceInfo, supportHttps bool) (*Discoverier,
 			Protocol:   protocol,
 			Announce:   true,
 		},
-		stop:        make(chan struct{}),
+		stop:        make(chan struct{}, 1),
 		discoveried: make(map[string]models.Announcement),
 		mu:          &sync.RWMutex{},
 	}, nil

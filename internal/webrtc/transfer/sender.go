@@ -24,6 +24,7 @@ const (
 	senderStateInit = iota
 	senderStateWaitNonce
 	senderStateWaitToken
+	senderStateWaitPin
 	senderStateWaitFileAccept
 	senderStateSendingFiles
 	senderStateDone
@@ -46,6 +47,7 @@ type RTCSender struct {
 	peer       *PeerConnection
 	pin        string
 	sessionID  string
+	pinAttempts int
 	mu         sync.Mutex
 
 	// State machine
@@ -213,7 +215,7 @@ func (s *RTCSender) handleMessage(data []byte) {
 	switch s.state {
 	case senderStateWaitNonce:
 		s.handleNonceResponse(msg, msgType)
-	case senderStateWaitToken:
+	case senderStateWaitToken, senderStateWaitPin:
 		s.handleTokenResponse(msg, msgType, data)
 	case senderStateWaitFileAccept:
 		s.handleFileAcceptance(msg, msgType, data)
@@ -257,8 +259,13 @@ func (s *RTCSender) handleNonceResponse(msg interface{}, msgType string) {
 }
 
 // handleTokenResponse processes the token response from receiver.
-func (s *RTCSender) handleTokenResponse(_ interface{}, msgType string, data []byte) {
-	// Token response has status field
+func (s *RTCSender) handleTokenResponse(msg interface{}, msgType string, data []byte) {
+	// Status responses: OK, PIN_REQUIRED, TOO_MANY_ATTEMPTS
+	if msgType == "status_TOO_MANY_ATTEMPTS" {
+		s.errors <- fmt.Errorf("too many PIN attempts, receiver blocked transfer")
+		return
+	}
+
 	if msgType != "status_OK" && msgType != "status_PIN_REQUIRED" {
 		slog.Warn("Expected token response, got", "type", msgType)
 		return
@@ -273,19 +280,26 @@ func (s *RTCSender) handleTokenResponse(_ interface{}, msgType string, data []by
 	slog.Info("Token response received", "status", tokenResp.Status)
 
 	if tokenResp.Status == "PIN_REQUIRED" {
-		// Handle PIN requirement
 		if s.pin == "" {
 			s.errors <- fmt.Errorf("receiver requires PIN but none provided")
 			return
 		}
+
+		if s.pinAttempts >= 3 {
+			s.errors <- fmt.Errorf("max PIN attempts reached")
+			return
+		}
+
+		s.pinAttempts++
+		slog.Info("Sending PIN", "attempt", s.pinAttempts)
+
 		// Send PIN message
 		pinMsg := RTCPinMessage{Pin: s.pin}
 		if err := s.sendJSON(pinMsg); err != nil {
 			s.errors <- fmt.Errorf("failed to send PIN: %w", err)
 			return
 		}
-		slog.Info("Sent PIN, waiting for verification")
-		// Stay in senderStateWaitToken to receive PIN response
+		s.state = senderStateWaitPin
 		return
 	}
 

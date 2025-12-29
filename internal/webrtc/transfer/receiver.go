@@ -17,6 +17,7 @@ import (
 const (
 	stateWaitNonce = iota
 	stateWaitToken
+	stateWaitPin
 	stateWaitFileList
 	stateWaitFiles
 	stateReceivingFiles
@@ -28,6 +29,7 @@ type RTCReceiver struct {
 	signingKey *crypto.SigningKey
 	peer       *PeerConnection
 	pin        string
+	pinAttempts int
 	saveDir    string
 	mu         sync.Mutex
 
@@ -156,6 +158,8 @@ func (r *RTCReceiver) handleMessage(data []byte) {
 		r.handleNonce(msg, msgType)
 	case stateWaitToken:
 		r.handleToken(msg, msgType)
+	case stateWaitPin:
+		r.handlePin(msg, msgType)
 	case stateWaitFileList:
 		r.handleFileList(msg, msgType, data)
 	case stateWaitFiles:
@@ -236,7 +240,44 @@ func (r *RTCReceiver) handleToken(msg interface{}, msgType string) {
 	}
 
 	slog.Info("Token exchange complete", "status", response.Status)
-	r.state = stateWaitFileList
+	if response.Status == "PIN_REQUIRED" {
+		r.state = stateWaitPin
+	} else {
+		r.state = stateWaitFileList
+	}
+}
+
+// handlePin processes the PIN message from sender.
+func (r *RTCReceiver) handlePin(msg interface{}, msgType string) {
+	if msgType != "pin" {
+		slog.Warn("Expected pin, got", "type", msgType)
+		return
+	}
+
+	pinMsg := msg.(*RTCPinMessage)
+	slog.Info("Received PIN challenge")
+
+	if pinMsg.Pin == r.pin {
+		slog.Info("PIN correct")
+		response := RTCPinReceivingResponse{Status: "OK"}
+		r.sendJSON(response)
+		r.state = stateWaitFileList
+		return
+	}
+
+	r.pinAttempts++
+	slog.Warn("Incorrect PIN", "attempt", r.pinAttempts)
+
+	if r.pinAttempts >= 3 {
+		slog.Error("Too many PIN attempts, closing connection")
+		response := RTCPinReceivingResponse{Status: "TOO_MANY_ATTEMPTS"}
+		r.sendJSON(response)
+		r.Close()
+		return
+	}
+
+	response := RTCPinReceivingResponse{Status: "PIN_REQUIRED"}
+	r.sendJSON(response)
 }
 
 // handleFileList processes the file list from sender.

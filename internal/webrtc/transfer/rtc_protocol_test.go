@@ -130,6 +130,34 @@ func TestParseRTCMessagePin(t *testing.T) {
 	}
 }
 
+// TestParseRTCMessagePinResponse tests parsing of PIN response messages.
+func TestParseRTCMessagePinResponse(t *testing.T) {
+	jsonData := `{"status":"OK"}`
+	
+	_, msgType, err := ParseRTCMessage([]byte(jsonData))
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	
+	if msgType != "status_OK" {
+		t.Errorf("msgType = %q; want 'status_OK'", msgType)
+	}
+}
+
+// TestParseRTCMessageTooManyAttempts tests parsing of too many attempts status.
+func TestParseRTCMessageTooManyAttempts(t *testing.T) {
+	jsonData := `{"status":"TOO_MANY_ATTEMPTS"}`
+	
+	_, msgType, err := ParseRTCMessage([]byte(jsonData))
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	
+	if msgType != "status_TOO_MANY_ATTEMPTS" {
+		t.Errorf("msgType = %q; want 'status_TOO_MANY_ATTEMPTS'", msgType)
+	}
+}
+
 // TestParseRTCMessageUnknown tests that unknown messages return nil.
 func TestParseRTCMessageUnknown(t *testing.T) {
 	jsonData := `{"unknown":"field"}`

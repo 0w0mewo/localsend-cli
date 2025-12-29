@@ -17,9 +17,10 @@ import (
 )
 
 var (
-	timeout  int64
-	legacy   bool
-	webrtc   bool
+	timeout int64
+	legacy  bool
+	webrtc  bool
+	lan     bool
 )
 
 var Cmd = &cobra.Command{
@@ -40,12 +41,22 @@ var Cmd = &cobra.Command{
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(timeout))
 		defer cancel()
 
+		// If no protocol flags are set, enable all discovery methods
+		if !cmd.Flags().Changed("lan") && !cmd.Flags().Changed("legacy") && !cmd.Flags().Changed("webrtc") {
+			lan = true
+			legacy = true
+			webrtc = true
+		}
+
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			scanner.Listen()
-		}()
+		if lan {
+			slog.Info("Performing LAN discovery")
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				scanner.Listen()
+			}()
+		}
 
 		if legacy {
 			slog.Info("Performing legacy HTTP subnet scan")
@@ -137,5 +148,6 @@ func init() {
 	Cmd.PersistentFlags().Int64VarP(&timeout, "timeout", "t", 4, "scan duration in seconds")
 	Cmd.PersistentFlags().BoolVarP(&legacy, "legacy", "l", false, "perform legacy HTTP subnet scan")
 	Cmd.PersistentFlags().BoolVarP(&webrtc, "webrtc", "w", false, "discover peers via WebRTC signaling server")
+	Cmd.PersistentFlags().BoolVarP(&lan, "lan", "n", false, "perform LAN discovery (mDNS/UDP)")
 }
 
