@@ -62,17 +62,17 @@ var Cmd = &cobra.Command{
 			}
 		}()
 
-		// WebRTC receiver
-		if webrtcMode {
-			// Parse extensions for WebRTC receiver too
-			var allowedExts []string
-			if acceptExt != "" {
-				allowedExts = strings.Split(acceptExt, ",")
-				for i, ext := range allowedExts {
-					allowedExts[i] = strings.TrimSpace(strings.ToLower(ext))
-				}
+		// WebRTC receiver (enabled by default as v3 is the future)
+		// Parse extensions for WebRTC receiver too
+		var allowedExts []string
+		if acceptExt != "" {
+			allowedExts = strings.Split(acceptExt, ",")
+			for i, ext := range allowedExts {
+				allowedExts[i] = strings.TrimSpace(strings.ToLower(ext))
 			}
+		}
 
+		if webrtcMode {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -173,5 +173,5 @@ func init() {
 	Cmd.PersistentFlags().BoolVar(&supportHttps, "https", true, "Do https")
 	Cmd.PersistentFlags().StringVarP(&acceptExt, "accept-ext", "a", "", "Comma-separated list of allowed file extensions (e.g., epub,pdf,mobi). Empty means accept all.")
 	Cmd.PersistentFlags().StringVarP(&logFile, "log", "l", "", "Path to transfer log file (JSON lines format)")
-	Cmd.PersistentFlags().BoolVarP(&webrtcMode, "webrtc", "w", false, "Also listen for WebRTC offers via signaling server")
+	Cmd.PersistentFlags().BoolVarP(&webrtcMode, "webrtc", "w", true, "Listen for WebRTC offers via signaling server (v3 protocol)")
 }
