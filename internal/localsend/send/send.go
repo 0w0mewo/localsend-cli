@@ -2,6 +2,7 @@ package send
 
 import (
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/0w0mewo/localsend-cli/internal/models"
@@ -51,7 +52,12 @@ func (fsp *baseSender) AddDir(dirPath string) error {
 			return nil
 		}
 
-		return fsp.AddFile(path)
+		err = fsp.AddFile(path)
+		if err != nil {
+			slog.Error("Skipping file due to error", "error", err, "file", path)
+		}
+
+		return nil
 	})
 }
 

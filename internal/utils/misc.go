@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"math/rand"
 	"net"
@@ -33,14 +34,14 @@ func ForEachAsync[T any](arr []T, wg *sync.WaitGroup, do func(value T)) {
 func SHA256ofFile(fpath string) (string, error) {
 	fd, err := os.Open(fpath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("sha256 hasher: fail to open file: %v: %s", err, fpath)
 	}
 	defer fd.Close()
 
 	hasher := sha256.New()
 	_, err = io.Copy(hasher, fd)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("sha256 hasher: io: %v: %s", err, fpath)
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
