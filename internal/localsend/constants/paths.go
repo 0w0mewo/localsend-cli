@@ -5,6 +5,7 @@ const (
 	PreuploadPath   = "/api/localsend/v2/prepare-upload"
 	CancelPath      = "/api/localsend/v2/cancel"
 	InfoPath        = "/api/localsend/v2/register"
+	PeerInfoPath    = "/api/localsend/v2/info"
 	InfoPathLegacy  = "/api/localsend/v*/info"
 	DownloadPath    = "/api/localsend/v2/download"
 	PreDownloadPath = "/api/localsend/v2/prepare-download"

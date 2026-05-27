@@ -24,7 +24,7 @@ func GetDeviceInfo(ip string, https bool) (models.DeviceInfo, error) {
 	req := agent.Request()
 	req.URI().SetScheme(scheme)
 	req.URI().SetHost(remoteAddr)
-	req.URI().SetPath(constants.InfoPath)
+	req.URI().SetPath(constants.PeerInfoPath)
 	req.Header.SetMethod(fiber.MethodGet)
 	err := agent.Parse()
 	if err != nil {
