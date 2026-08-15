@@ -1,8 +1,10 @@
 package recv
 
 import (
+	"errors"
 	"log/slog"
 
+	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/gofiber/fiber/v2"
 )
@@ -57,6 +59,10 @@ func (fr *FileReceiver) uploadHandler(c *fiber.Ctx) error {
 	err = session.SaveFile(fr.saveToDir, fileId, token, c.Body())
 	if err != nil {
 		slog.Error("Upload error", "remote", c.IP(), "session", sessionId, "error", err)
+		if errors.Is(err, constants.ErrChecksum) {
+			return c.SendStatus(422)
+		}
+
 		return c.SendStatus(500)
 	}
 
