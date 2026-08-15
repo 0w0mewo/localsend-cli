@@ -8,40 +8,40 @@ import (
 	"github.com/0w0mewo/localsend-cli/internal/localsend/send"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/gofiber/fiber/v2"
+	"github.com/valyala/fasthttp"
 )
 
-func GetDeviceInfo(ip string, https bool) (models.DeviceInfo, error) {
+func GetDeviceInfo(httpclient *fasthttp.Client, ip string, https bool) (models.DeviceInfo, error) {
 	remoteAddr := net.JoinHostPort(ip, "53317")
-
-	agent := fiber.AcquireAgent()
-	defer fiber.ReleaseAgent(agent)
 
 	scheme := "http"
 	if https {
 		scheme = "https"
 	}
 
-	req := agent.Request()
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
 	req.URI().SetScheme(scheme)
 	req.URI().SetHost(remoteAddr)
 	req.URI().SetPath(constants.PeerInfoPath)
 	req.Header.SetMethod(fiber.MethodGet)
-	err := agent.Parse()
+
+	err := httpclient.Do(req, resp)
 	if err != nil {
-		return models.DeviceInfo{}, err
+		return models.DeviceInfo{}, nil
 	}
 
-	status, b, errs := agent.InsecureSkipVerify().Bytes()
-	if len(errs) != 0 {
-		return models.DeviceInfo{}, errs[0]
-	}
-	err = constants.ParseError(status)
+	err = constants.ParseError(resp.StatusCode())
 	if err != nil {
 		return models.DeviceInfo{}, err
 	}
 
 	var res models.DeviceInfo
-	err = json.Unmarshal(b, &res)
+	err = json.Unmarshal(resp.Body(), &res)
 	if err != nil {
 		return models.DeviceInfo{}, err
 	}
@@ -50,11 +50,11 @@ func GetDeviceInfo(ip string, https bool) (models.DeviceInfo, error) {
 	return res, nil
 }
 
-func NewFileSender(useDownloadAPI ...bool) send.FileSender {
+func NewFileSender(httpclient *fasthttp.Client, useDownloadAPI ...bool) send.FileSender {
 	if len(useDownloadAPI) > 0 {
 		if useDownloadAPI[0] {
 			return send.NewReverseSender()
 		}
 	}
-	return send.NewForwardSender()
+	return send.NewForwardSender(httpclient)
 }

@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/0w0mewo/localsend-cli/internal/utils"
@@ -145,6 +146,13 @@ func LoadOrGenTLScert(privKeyFile, certFile string) (tls.Certificate, error) {
 	}
 
 	return GenAndSaveTLScert(privKeyFile, certFile)
+}
+
+func LoadOrGenTempTLScert() (tls.Certificate, error) {
+	privkeyFile := filepath.Join(os.TempDir(), "server.key.pem")
+	certFile := filepath.Join(os.TempDir(), "server.crt")
+
+	return LoadOrGenTLScert(privkeyFile, certFile)
 }
 
 func GenAlias() string {

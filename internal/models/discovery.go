@@ -2,9 +2,7 @@ package models
 
 type Announcement struct {
 	DeviceInfo
-	Protocol string `json:"protocol"`
-	Port     int    `json:"port"`
-	Announce bool   `json:"announce"`
+	Announce bool `json:"announce"`
 }
 
 func (anno Announcement) GetDeviceInfo() DeviceInfo {
@@ -19,6 +17,8 @@ type DeviceInfo struct {
 	DeviceType  string `json:"deviceType"`
 	Fingerprint string `json:"fingerprint"`
 	Download    bool   `json:"download"`
+	Protocol    string `json:"protocol"`
+	Port        int    `json:"port"`
 }
 
 func NewDeviceInfo(alias string, fingerprint string) DeviceInfo {
@@ -28,6 +28,8 @@ func NewDeviceInfo(alias string, fingerprint string) DeviceInfo {
 		DeviceModel: "LocalSend-CLI",
 		DeviceType:  "headless",
 		Fingerprint: fingerprint,
+		Protocol:    "https",
+		Port:        53317,
 		Download:    false,
 	}
 }

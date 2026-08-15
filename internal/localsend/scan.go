@@ -37,17 +37,15 @@ func NewDiscoverier(devInfo models.DeviceInfo, supportHttps bool, webServer *fib
 		return nil, err
 	}
 
-	protocol := "http"
-	if supportHttps {
-		protocol = "https"
+	// default is https
+	if !supportHttps {
+		devInfo.Protocol = "http"
 	}
 
 	d := &Discoverier{
 		mcastConn: conn,
 		selfAnno: &models.Announcement{
 			DeviceInfo: devInfo,
-			Port:       53317,
-			Protocol:   protocol,
 			Announce:   true,
 		},
 		stop:        make(chan struct{}),

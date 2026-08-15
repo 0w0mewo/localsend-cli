@@ -1,6 +1,7 @@
 package send
 
 import (
+	"crypto/tls"
 	"errors"
 	"log/slog"
 	"os"
@@ -9,8 +10,8 @@ import (
 	lsutils "github.com/0w0mewo/localsend-cli/internal/localsend/utils"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"github.com/valyala/fasthttp"
 )
 
 var (
@@ -34,23 +35,32 @@ var Cmd = &cobra.Command{
 			return errors.New("File is required")
 		}
 
-		var err error
+		// generate a temporary certificate to pet the offical app
+		cert, err := lsutils.LoadOrGenTempTLScert()
+		if err != nil {
+			return err
+		}
+		fingerprint := utils.SHA256ofCert(cert.Leaf)
 
-		// only request remote device info when download api is unused
-		var devinfo models.DeviceInfo
-		if !useDownloadAPI {
-			devinfo, err = localsend.GetDeviceInfo(ip, supportHttps)
-			if err != nil {
-				slog.Error("Fail to get device info", "error", err)
-				return nil
-			}
-		} else {
-			devinfo = models.NewDeviceInfo(lsutils.GenAlias(), uuid.NewString())
+		// http client that skips certificate verification and presents client side cert
+		httpclient := &fasthttp.Client{
+			NoDefaultUserAgentHeader: true,
+			TLSConfig: &tls.Config{
+				InsecureSkipVerify: true,
+				GetClientCertificate: func(_ *tls.CertificateRequestInfo) (*tls.Certificate, error) {
+					return &cert, nil
+				},
+			},
 		}
 
-		sender := localsend.NewFileSender(useDownloadAPI)
+		// sender device info
+		var target models.DeviceInfo
+		target = models.NewDeviceInfo(lsutils.GenAlias(), fingerprint)
+		target.IP = ip // populate the IP address because the file sender needs it
+
+		sender := localsend.NewFileSender(httpclient, useDownloadAPI)
 		sender.SetPIN(pin)
-		sender.Init(&devinfo, supportHttps)
+		sender.Init(&target, supportHttps)
 
 		// try to add every file
 		for _, file := range files {

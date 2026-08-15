@@ -9,24 +9,25 @@ import (
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	"github.com/0w0mewo/localsend-cli/internal/models"
-	"github.com/0w0mewo/localsend-cli/internal/utils"
 	"github.com/gofiber/fiber/v2"
 	"github.com/valyala/fasthttp"
 )
 
 type ForwardSender struct {
 	baseSender
-	remote *models.DeviceInfo
-	https  bool
-	abort  bool
+	remote     *models.DeviceInfo
+	https      bool
+	abort      bool
+	httpclient *fasthttp.Client
 }
 
-func NewForwardSender() *ForwardSender {
+func NewForwardSender(httpclient *fasthttp.Client) *ForwardSender {
 	return &ForwardSender{
 		baseSender: baseSender{
 			files:  make(map[string]models.FileMeta),
 			tokens: make(map[string]string),
 		},
+		httpclient: httpclient,
 	}
 }
 
@@ -42,52 +43,45 @@ func (fsp *ForwardSender) Init(target *models.DeviceInfo, https bool) error {
 }
 
 func (fsp *ForwardSender) preUploadReq() error {
-	agent := fiber.AcquireAgent()
-	defer fiber.ReleaseAgent(agent)
-
-	if fsp.https {
-		// check fingerprint if https mode (See https://github.com/localsend/protocol section.2)
-		certs, err := utils.FetchX509Cert(net.JoinHostPort(fsp.remote.IP, "53317"))
-		if err != nil {
-			return err
-		}
-		fingerprint := utils.SHA256ofCert(certs[0]) // only check the first cert
-		if fingerprint != fsp.remote.Fingerprint {
-			return constants.ErrFingerprint
-		}
-	}
-
 	var meta models.PreUploadReq
 	meta.Info = fsp.remote
 	meta.Files = fsp.files
-
-	// setup request
-	req := agent.Request()
-	fsp.prepareUri(req, constants.PreuploadPath)
-	req.Header.SetMethod(fiber.MethodPost)
-	if fsp.pin != "" {
-		req.URI().QueryArgs().Add("pin", fsp.pin)
-	}
-	err := agent.Parse()
+	metaJson, err := json.Marshal(&meta)
 	if err != nil {
 		return err
 	}
 
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	// setup request
+	fsp.prepareUri(req, constants.PreuploadPath)
+	req.Header.SetMethod(fiber.MethodPost)
+	req.SetBodyRaw(metaJson)
+	if fsp.pin != "" {
+		req.URI().QueryArgs().Add("pin", fsp.pin)
+	}
+
+	println(string(req.URI().FullURI()))
+
 	// make request
-	status, b, errs := agent.InsecureSkipVerify().JSON(&meta).Bytes()
-	if len(errs) != 0 {
-		return errs[0]
+	err = fsp.httpclient.Do(req, resp)
+	if err != nil {
+		return err
 	}
 
 	// parse error from http status
-	err = constants.ParseError(status)
+	err = constants.ParseError(resp.StatusCode())
 	if err != nil {
 		return err
 	}
 
 	// decode response bytes
 	var respMeta models.PreUploadResp
-	err = json.Unmarshal(b, &respMeta)
+	err = json.Unmarshal(resp.Body(), &respMeta)
 	if err != nil {
 		return err
 	}
@@ -108,21 +102,6 @@ func (fsp *ForwardSender) sendFile(fid string, ftoken string) error {
 		return constants.ErrUnknown // unlikely, but check it anyway
 	}
 
-	agent := fiber.AcquireAgent()
-	defer fiber.ReleaseAgent(agent)
-
-	// prepare request
-	req := agent.Request()
-	fsp.prepareUri(req, constants.UploadPath)
-	req.Header.SetMethod(fiber.MethodPost)
-	req.URI().QueryArgs().Add("token", ftoken)
-	req.URI().QueryArgs().Add("sessionId", fsp.session)
-	req.URI().QueryArgs().Add("fileId", fid)
-	err := agent.Parse()
-	if err != nil {
-		return err
-	}
-
 	// open file
 	fd, err := os.Open(fmeta.FullPath)
 	if err != nil {
@@ -130,13 +109,28 @@ func (fsp *ForwardSender) sendFile(fid string, ftoken string) error {
 	}
 	defer fd.Close()
 
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
+	// prepare request
+	fsp.prepareUri(req, constants.UploadPath)
+	req.Header.SetMethod(fiber.MethodPost)
+	req.URI().QueryArgs().Add("token", ftoken)
+	req.URI().QueryArgs().Add("sessionId", fsp.session)
+	req.URI().QueryArgs().Add("fileId", fid)
+	req.SetBodyStream(fd, int(fmeta.Size))
+
 	// send file
-	status, _, errs := agent.InsecureSkipVerify().BodyStream(fd, int(fmeta.Size)).Bytes()
-	if len(errs) != 0 {
-		return errs[0]
+
+	err = fsp.httpclient.Do(req, resp)
+	if err != nil {
+		return err
 	}
 
-	return constants.ParseError(status)
+	return constants.ParseError(resp.StatusCode())
 }
 
 func (fsp *ForwardSender) Start() error {
@@ -157,29 +151,28 @@ func (fsp *ForwardSender) Start() error {
 }
 
 func (fsp *ForwardSender) Cancel() error {
-	agent := fiber.AcquireAgent().InsecureSkipVerify()
 	defer func() {
 		fsp.abort = true
-		fiber.ReleaseAgent(agent)
 	}()
 
+	req := fasthttp.AcquireRequest()
+	defer fasthttp.ReleaseRequest(req)
+
+	resp := fasthttp.AcquireResponse()
+	defer fasthttp.ReleaseResponse(resp)
+
 	// prepare request
-	req := agent.Request()
 	fsp.prepareUri(req, constants.CancelPath)
 	req.Header.SetMethod(fiber.MethodPost)
 	req.URI().QueryArgs().Add("sessionId", fsp.session)
-	err := agent.Parse()
+
+	// make request
+	err := fsp.httpclient.Do(req, resp)
 	if err != nil {
 		return err
 	}
 
-	// make request
-	status, _, errs := agent.Bytes()
-	if len(errs) != 0 {
-		return errs[0]
-	}
-
-	return constants.ParseError(status)
+	return constants.ParseError(resp.StatusCode())
 }
 
 func (fsp *ForwardSender) prepareUri(req *fasthttp.Request, path string) {
