@@ -74,5 +74,11 @@ func (fr *FileReceiver) cancelHandler(c *fiber.Ctx) error {
 }
 
 func (fr *FileReceiver) infoHandler(c *fiber.Ctx) error {
+	var anno models.Announcement
+	err := c.BodyParser(&anno)
+	if err == nil {
+		fr.discoverier.PutDiscovered(c.IP(), anno)
+	}
+
 	return c.JSON(&fr.identity)
 }

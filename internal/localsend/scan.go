@@ -21,7 +21,7 @@ var multicastDiscoveryAddr = &net.UDPAddr{
 }
 
 type Discoverier struct {
-	mcastConn   *net.UDPConn
+	mcastConn   *net.UDPConn // for multicast announcement
 	selfAnno    *models.Announcement
 	discoveried map[string]models.Announcement
 	mu          *sync.RWMutex

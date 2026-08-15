@@ -7,10 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/0w0mewo/localsend-cli/internal/localsend"
+	lsrecv "github.com/0w0mewo/localsend-cli/internal/localsend/recv"
 	"github.com/0w0mewo/localsend-cli/internal/localsend/utils"
-	"github.com/0w0mewo/localsend-cli/internal/models"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -23,27 +21,25 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		slog.Info("Start Scanning")
 
-		scanner, err := localsend.NewDiscoverier(
-			models.NewDeviceInfo(utils.GenAlias(), uuid.NewString()),
-			true)
-		if err != nil {
-			slog.Error("Fail to create advertiser", "error", err)
-			return
-		}
+		recver := lsrecv.NewFileReceiver(utils.GenAlias(), ".", true)
+		recver.Init()
 
 		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			scanner.Listen()
-		}()
+
+		wg.Go(func() {
+			err := recver.Start(true)
+			if err != nil {
+				slog.Error("Fail to start server", "error", err)
+				return
+			}
+		})
 
 		<-time.After(time.Second * time.Duration(timeout))
-		slog.Info("Stop Scanning")
-		scanner.Shutdown()
+
+		recver.Stop()
 		wg.Wait()
 
-		devlist := scanner.GetAllDiscovered()
+		devlist := recver.GetAllDiscovered()
 
 		if len(devlist) > 0 {
 			fmt.Fprintf(os.Stdout, "Found Devices: \n")
