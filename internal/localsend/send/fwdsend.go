@@ -65,8 +65,6 @@ func (fsp *ForwardSender) preUploadReq() error {
 		req.URI().QueryArgs().Add("pin", fsp.pin)
 	}
 
-	println(string(req.URI().FullURI()))
-
 	// make request
 	err = fsp.httpclient.Do(req, resp)
 	if err != nil {
