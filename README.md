@@ -1,5 +1,7 @@
 ### LocalSend CLI
 
+# THIS project is DEPRECATED and only compatible with offical v1.17.0. The offical CLI is now available on 1.18.0.
+
 Simple CLI program that implements LocalSend v2 protocol
 
 #### Quickstart
