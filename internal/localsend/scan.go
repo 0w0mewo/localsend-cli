@@ -7,8 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
 	"github.com/0w0mewo/localsend-cli/internal/models"
 	"github.com/0w0mewo/localsend-cli/internal/utils"
+	"github.com/gofiber/fiber/v2"
 )
 
 const (
@@ -22,13 +24,14 @@ var multicastDiscoveryAddr = &net.UDPAddr{
 
 type Discoverier struct {
 	mcastConn   *net.UDPConn // for multicast announcement
+	webServer   *fiber.App   // for collecting device response
 	selfAnno    *models.Announcement
 	discoveried map[string]models.Announcement
 	mu          *sync.RWMutex
 	stop        chan struct{}
 }
 
-func NewDiscoverier(devInfo models.DeviceInfo, supportHttps bool) (*Discoverier, error) {
+func NewDiscoverier(devInfo models.DeviceInfo, supportHttps bool, webServer *fiber.App) (*Discoverier, error) {
 	conn, err := net.ListenMulticastUDP("udp", nil, multicastDiscoveryAddr)
 	if err != nil {
 		return nil, err
@@ -39,7 +42,7 @@ func NewDiscoverier(devInfo models.DeviceInfo, supportHttps bool) (*Discoverier,
 		protocol = "https"
 	}
 
-	return &Discoverier{
+	d := &Discoverier{
 		mcastConn: conn,
 		selfAnno: &models.Announcement{
 			DeviceInfo: devInfo,
@@ -50,7 +53,13 @@ func NewDiscoverier(devInfo models.DeviceInfo, supportHttps bool) (*Discoverier,
 		stop:        make(chan struct{}),
 		discoveried: make(map[string]models.Announcement),
 		mu:          &sync.RWMutex{},
-	}, nil
+		webServer:   webServer,
+	}
+
+	d.webServer.Post(constants.InfoPath, d.infoHandler)
+	d.webServer.Get(constants.InfoPathLegacy, d.infoHandler)
+
+	return d, nil
 }
 
 func (ma *Discoverier) Listen() error {
@@ -141,4 +150,14 @@ func (mcs *Discoverier) PutDiscovered(ip string, anno models.Announcement) {
 	defer mcs.mu.Unlock()
 
 	mcs.discoveried[ip] = anno
+}
+
+func (mcs *Discoverier) infoHandler(c *fiber.Ctx) error {
+	var anno models.Announcement
+	err := c.BodyParser(&anno)
+	if err == nil {
+		mcs.PutDiscovered(c.IP(), anno)
+	}
+
+	return c.JSON(&mcs.selfAnno.DeviceInfo)
 }

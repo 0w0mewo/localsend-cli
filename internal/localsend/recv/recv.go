@@ -67,7 +67,7 @@ func (fr *FileReceiver) Init() error {
 	}
 
 	// start advertisement
-	fr.discoverier, err = localsend.NewDiscoverier(fr.identity, fr.supportHttps)
+	fr.discoverier, err = localsend.NewDiscoverier(fr.identity, fr.supportHttps, fr.webServer)
 	if err != nil {
 		return err
 	}
@@ -75,18 +75,13 @@ func (fr *FileReceiver) Init() error {
 	return err
 }
 
-func (fr *FileReceiver) Start(scannerMode ...bool) error {
+func (fr *FileReceiver) Start() error {
 	server := fr.webServer
 
-	if len(scannerMode) < 1 || !scannerMode[0] {
-		server.Post(constants.PreuploadPath, fr.preUploadHandler)
-		server.Post(constants.UploadPath, fr.uploadHandler)
-		server.Post(constants.CancelPath, fr.cancelHandler)
-		slog.Info("Waitting for receiving files (Ctrl-C to terminate)")
-	}
-
-	server.Post(constants.InfoPath, fr.infoHandler)
-	server.Get(constants.InfoPathLegacy, fr.infoHandler)
+	server.Post(constants.PreuploadPath, fr.preUploadHandler)
+	server.Post(constants.UploadPath, fr.uploadHandler)
+	server.Post(constants.CancelPath, fr.cancelHandler)
+	slog.Info("Waitting for receiving files (Ctrl-C to terminate)")
 
 	go fr.advertise() // let others know we are here
 
@@ -106,8 +101,4 @@ func (fr *FileReceiver) Stop() error {
 
 	fr.discoverier.Shutdown()
 	return fr.webServer.Shutdown()
-}
-
-func (fr *FileReceiver) GetAllDiscovered() map[string]models.Announcement {
-	return fr.discoverier.GetAllDiscovered()
 }

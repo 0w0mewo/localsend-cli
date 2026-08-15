@@ -7,8 +7,10 @@ import (
 	"sync"
 	"time"
 
-	lsrecv "github.com/0w0mewo/localsend-cli/internal/localsend/recv"
+	"github.com/0w0mewo/localsend-cli/internal/localsend"
 	"github.com/0w0mewo/localsend-cli/internal/localsend/utils"
+	"github.com/0w0mewo/localsend-cli/internal/models"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -21,26 +23,29 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		slog.Info("Start Scanning")
 
-		recver := lsrecv.NewFileReceiver(utils.GenAlias(), ".", true)
-		recver.Init()
+		webserver := utils.NewWebServer()
+		scanner, err := localsend.NewDiscoverier(models.NewDeviceInfo(utils.GenAlias(), uuid.NewString()), false, webserver)
+		if err != nil {
+			slog.Error("Fail to create scanner", "error", err)
+			return
+		}
 
 		var wg sync.WaitGroup
-
 		wg.Go(func() {
-			err := recver.Start(true)
-			if err != nil {
-				slog.Error("Fail to start server", "error", err)
-				return
-			}
+			scanner.Listen()
+		})
+		wg.Go(func() {
+			// no need to use HTTPS, we just want others reply the device info to us
+			webserver.Listen("0.0.0.0:53317")
 		})
 
 		<-time.After(time.Second * time.Duration(timeout))
 
-		recver.Stop()
-		wg.Wait()
+		slog.Info("Stop Scanning")
+		scanner.Shutdown()
+		webserver.Shutdown()
 
-		devlist := recver.GetAllDiscovered()
-
+		devlist := scanner.GetAllDiscovered()
 		if len(devlist) > 0 {
 			fmt.Fprintf(os.Stdout, "Found Devices: \n")
 			for ip, info := range devlist {
