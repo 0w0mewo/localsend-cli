@@ -149,8 +149,8 @@ func LoadOrGenTLScert(privKeyFile, certFile string) (tls.Certificate, error) {
 }
 
 func LoadOrGenTempTLScert() (tls.Certificate, error) {
-	privkeyFile := filepath.Join(os.TempDir(), "server.key.pem")
-	certFile := filepath.Join(os.TempDir(), "server.crt")
+	privkeyFile := filepath.Join(os.TempDir(), "identity.key.pem")
+	certFile := filepath.Join(os.TempDir(), "identity.crt")
 
 	return LoadOrGenTLScert(privkeyFile, certFile)
 }

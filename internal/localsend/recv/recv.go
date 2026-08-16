@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
-	"path/filepath"
 
 	"github.com/0w0mewo/localsend-cli/internal/localsend"
 	"github.com/0w0mewo/localsend-cli/internal/localsend/constants"
@@ -55,9 +54,7 @@ func (fr *FileReceiver) Init() error {
 
 		// load cert for https server
 		// TODO: save certificate in user config directory
-		privkeyFile := filepath.Join(os.TempDir(), "server.key.pem")
-		certFile := filepath.Join(os.TempDir(), "server.crt")
-		fr.cert, err = lsutils.LoadOrGenTLScert(privkeyFile, certFile)
+		fr.cert, err = lsutils.LoadOrGenTempTLScert()
 		if err != nil {
 			return err
 		}
